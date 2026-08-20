@@ -27,5 +27,10 @@ uv.lock.tmp
 .DS_Store
 Thumbs.db
 
+# Office lock files
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
 # Data
 *.log

@@ -5,3 +5,4 @@ turns:
 expected:
   route: escalate
   intent_label: competitor_mention
+  has_draft: true

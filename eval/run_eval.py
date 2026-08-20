@@ -95,6 +95,7 @@ async def main() -> None:
         conversation_id = path.stem
         convo = yaml.safe_load(path.read_text(encoding="utf-8"))
         expected_route = convo["expected"]["route"]
+        expected_has_draft = convo["expected"].get("has_draft")
 
         try:
             result = await run_one(conversation_id, convo)
@@ -104,13 +105,19 @@ async def main() -> None:
             continue
 
         actual_route = result.get("route")
+        draft_text = result.get("draft_reply", {}).get("text", "")
         model_used = result.get("draft_reply", {}).get("model_used", "-")
-        ok = actual_route == expected_route
+
+        route_ok = actual_route == expected_route
+        draft_ok = expected_has_draft is None or bool(draft_text) == expected_has_draft
+        ok = route_ok and draft_ok
+
         passed, failed = (passed + 1, failed) if ok else (passed, failed + 1)
         status = "PASS" if ok else "FAIL"
+        draft_note = "" if expected_has_draft is None else f" draft_ok={draft_ok}"
         print(
             f"{status}  {conversation_id}: expected={expected_route} "
-            f"actual={actual_route} model={model_used}"
+            f"actual={actual_route} model={model_used}{draft_note}"
         )
 
     print(f"\n{passed}/{passed + failed} passed")

@@ -4,4 +4,7 @@ turns:
     text: "هاد اسوأ تعامل شفته بحياتي!! محدا رد علي من يومين!! ما رح اشتري من عندكم بعد اليوم"
 expected:
   route: escalate
-  notes: "Should trip the negative-sentiment risk trigger even if classify_intent's label alone isn't in the hard risk-category set."
+  has_draft: true
+  notes: >
+    Should trip the negative-sentiment risk trigger even if classify_intent's label alone
+    isn't in the hard risk-category set. A draft should still be produced.

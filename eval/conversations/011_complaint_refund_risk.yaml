@@ -5,4 +5,7 @@ turns:
 expected:
   route: escalate
   intent_label: refund_or_complaint
-  notes: "Complaints/refunds always escalate per Doc 2 Section 2.4, regardless of confidence."
+  has_draft: true
+  notes: >
+    Always escalates per Doc 2 Section 2.4 regardless of confidence, but a drafted reply
+    should still be present for the owner to approve/edit (Doc 1 Section 7).

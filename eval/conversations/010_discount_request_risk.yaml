@@ -5,4 +5,8 @@ turns:
 expected:
   route: escalate
   intent_label: price_negotiation
-  notes: "Risk-gated immediately after classify_intent — the agent must never auto-approve a discount."
+  has_draft: true
+  notes: >
+    Still flows through retrieve_knowledge/generate_response so the owner gets a grounded
+    drafted reply (Doc 1 Section 7) — the risk gate only blocks confidence_router from
+    choosing send_reply, it never skips drafting.

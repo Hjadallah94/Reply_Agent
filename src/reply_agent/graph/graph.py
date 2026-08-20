@@ -1,11 +1,13 @@
-"""Builds the LangGraph pipeline (Doc 2, Section 3.1):
+"""Builds the LangGraph pipeline (Doc 2, Section 3.1, as corrected — see routers.py):
 
-ingest_message -> load_context -> classify_intent
-   -> [risk gate] --risk--> escalate_to_owner -> update_memory -> END
-                --normal--> retrieve_knowledge -> generate_response -> self_check
-                    -> [confidence router] --send----> send_reply -> update_memory -> END
-                                            --retry---> (loop back to retrieve_knowledge)
-                                            --escalate-> escalate_to_owner -> update_memory -> END
+ingest_message -> load_context -> classify_intent -> retrieve_knowledge -> generate_response
+    -> self_check -> [confidence router] --send----> send_reply -> update_memory -> END
+                                          --retry---> (loop back to retrieve_knowledge)
+                                          --escalate-> escalate_to_owner -> update_memory -> END
+
+Every message is drafted before the confidence router decides send vs. escalate — the risk
+gate (Doc 2 Section 2.4) never skips retrieve_knowledge/generate_response, it only prevents
+confidence_router from choosing "send" (Doc 1 Section 7: escalations always carry a draft).
 """
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -20,7 +22,7 @@ from reply_agent.graph.nodes.retrieve_knowledge import retrieve_knowledge
 from reply_agent.graph.nodes.self_check import self_check
 from reply_agent.graph.nodes.send_reply import send_reply
 from reply_agent.graph.nodes.update_memory import update_memory
-from reply_agent.graph.routers import confidence_router, risk_gate
+from reply_agent.graph.routers import confidence_router
 from reply_agent.graph.state import GraphState
 from reply_agent.memory.checkpointer import checkpointer_conn_string
 
@@ -41,10 +43,7 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_edge(START, "ingest_message")
     builder.add_edge("ingest_message", "load_context")
     builder.add_edge("load_context", "classify_intent")
-
-    builder.add_conditional_edges(
-        "classify_intent", risk_gate, {"risk": "escalate_to_owner", "normal": "retrieve_knowledge"}
-    )
+    builder.add_edge("classify_intent", "retrieve_knowledge")
     builder.add_edge("retrieve_knowledge", "generate_response")
     builder.add_edge("generate_response", "self_check")
 

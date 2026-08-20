@@ -5,3 +5,4 @@ turns:
 expected:
   route: escalate
   intent_label: legal_threat
+  has_draft: true

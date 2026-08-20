@@ -7,6 +7,7 @@ turns:
     text: "مرحبا، بدي اعرف وين صار طلبي يلي عملته امبارح؟"
 expected:
   route: escalate
+  has_draft: true
   notes: >
     self_check should fail this (or needs_retry -> still nothing found -> escalate) because
     there is no order data in the knowledge base to ground a status claim. This is the
