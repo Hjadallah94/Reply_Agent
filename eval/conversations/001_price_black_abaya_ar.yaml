@@ -1,0 +1,7 @@
+description: "Simple price question, Arabic script — should auto-send, grounded in catalog."
+turns:
+  - role: customer
+    text: "هاي بدي اعرف كم سعر العباية السوداء العادية؟"
+expected:
+  route: send
+  notes: "24 JOD, should not invent a different price."

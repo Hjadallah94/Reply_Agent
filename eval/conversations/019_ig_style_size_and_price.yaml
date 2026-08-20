@@ -1,0 +1,7 @@
+description: "IG-DM-style combined size+price question, mirrors the Doc 2 Section 8 worked example but against a different product."
+turns:
+  - role: customer
+    text: "3ndkom l abaya l mtarraza b size M? w kam se3rha?"
+expected:
+  route: send
+  notes: "Embroidered Evening Abaya, 45 JOD, size M in stock."

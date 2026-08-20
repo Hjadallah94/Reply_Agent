@@ -1,0 +1,7 @@
+description: "Delivery question for a governorate not explicitly named in the policy (Aqaba) — tests generalizing 'outside Amman' correctly rather than refusing."
+turns:
+  - role: customer
+    text: "بتوصلوا عالعقبة؟"
+expected:
+  route: send
+  notes: "Policy says 'outside Amman (other governorates)' generically — Aqaba should be covered by that, 2-4 days / 4 JOD."

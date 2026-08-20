@@ -1,0 +1,29 @@
+# Example catalog for "Rose Abaya House" — a fashion/abaya seller, used by the eval set
+# and as a template for onboarding a real pilot seller.
+- name: "Classic Black Abaya"
+  description: "Everyday open-front abaya, light crepe fabric."
+  price_jod: 24
+  stock_status: in_stock
+  variants:
+    - label: "size S"
+      stock_status: in_stock
+    - label: "size M"
+      stock_status: in_stock
+    - label: "size L"
+      stock_status: out_of_stock
+
+- name: "Embroidered Evening Abaya"
+  description: "Formal abaya with gold embroidery along the sleeves, for occasions."
+  price_jod: 45
+  stock_status: in_stock
+  variants:
+    - label: "size M"
+      stock_status: in_stock
+    - label: "size L"
+      stock_status: in_stock
+
+- name: "Printed Summer Kimono"
+  description: "Light floral-print kimono, one size fits most."
+  price_jod: 18
+  stock_status: out_of_stock
+  variants: []

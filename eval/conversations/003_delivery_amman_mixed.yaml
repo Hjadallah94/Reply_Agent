@@ -1,0 +1,7 @@
+description: "Code-switched Arabic/English delivery-time question within Amman."
+turns:
+  - role: customer
+    text: "if I order today momken twslny bukra? ana bl Amman"
+expected:
+  route: send
+  notes: "Amman delivery is 1-2 business days, 3 JOD (free over 60 JOD)."

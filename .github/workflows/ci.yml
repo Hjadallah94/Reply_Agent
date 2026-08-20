@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: reply_agent
+          POSTGRES_PASSWORD: reply_agent
+          POSTGRES_DB: reply_agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U reply_agent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://reply_agent:reply_agent@localhost:5432/reply_agent
+      DATABASE_URL_SYNC: postgresql+psycopg://reply_agent:reply_agent@localhost:5432/reply_agent
+      REDIS_URL: redis://localhost:6379/0
+      META_APP_SECRET: ci-test-secret
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ci-test-token
+      WHATSAPP_DRY_RUN: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Run migrations
+        run: uv run alembic upgrade head
+
+      - name: Run unit + integration tests
+        run: uv run pytest tests/ -v

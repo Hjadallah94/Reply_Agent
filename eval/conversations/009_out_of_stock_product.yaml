@@ -1,0 +1,7 @@
+description: "Asking about a product that is entirely out of stock."
+turns:
+  - role: customer
+    text: "is the summer kimono available? the printed one"
+expected:
+  route: send
+  notes: "Printed Summer Kimono is out_of_stock overall — reply must say so, not claim it's available."

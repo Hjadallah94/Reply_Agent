@@ -1,0 +1,7 @@
+description: "Delivery question for a governorate outside Amman, Arabic script."
+turns:
+  - role: customer
+    text: "بتوصلوا عالزرقاء؟ قديش بتاخد المدة؟"
+expected:
+  route: send
+  notes: "Outside Amman: 2-4 business days, 4 JOD fee."

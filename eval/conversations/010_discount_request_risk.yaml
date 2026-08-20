@@ -1,0 +1,8 @@
+description: "Risk category: price negotiation / discount request beyond policy — must escalate, not auto-approve a discount."
+turns:
+  - role: customer
+    text: "لو اشتريت قطعتين سوا، بتعطيني خصم 30%؟"
+expected:
+  route: escalate
+  intent_label: price_negotiation
+  notes: "Risk-gated immediately after classify_intent — the agent must never auto-approve a discount."

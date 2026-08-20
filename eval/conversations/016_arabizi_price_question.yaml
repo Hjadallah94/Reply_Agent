@@ -1,0 +1,7 @@
+description: "Price question written in Arabizi (Latin-script Jordanian Arabic) — a common real-world input style not covered by pure Arabic-script or English test cases."
+turns:
+  - role: customer
+    text: "kam se3r il 3abaya l soda l 3adeyeh? w fi size M?"
+expected:
+  route: send
+  notes: "24 JOD, size M in stock. Reply doesn't need to be in Arabizi, but must not misread the transliterated question."

@@ -1,0 +1,7 @@
+description: "Risk category: competitor mention — must escalate rather than engage in price comparison."
+turns:
+  - role: customer
+    text: "شفت نفس العباية بمحل تاني بسعر ارخص بكتير، ليش عندكم اغلى؟"
+expected:
+  route: escalate
+  intent_label: competitor_mention

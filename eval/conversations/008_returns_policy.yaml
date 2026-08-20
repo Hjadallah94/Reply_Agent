@@ -1,0 +1,7 @@
+description: "Returns/exchange policy question — tests the agent doesn't overpromise a cash refund."
+turns:
+  - role: customer
+    text: "لو ما لبقتلي العباية، بقدر ارجعها واخذ مصاري؟"
+expected:
+  route: send
+  notes: "Only exchanges within 3 days (unworn, tags on), no cash refunds — reply must not promise a refund."

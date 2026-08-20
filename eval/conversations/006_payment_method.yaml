@@ -1,0 +1,7 @@
+description: "Payment method FAQ."
+turns:
+  - role: customer
+    text: "بس عندكم كاش عالتسليم ولا لازم ادفع اونلاين؟"
+expected:
+  route: send
+  notes: "COD available everywhere delivered; CliQ also accepted."

@@ -1,0 +1,10 @@
+description: "Spam / off-topic message — not a risk category, tests that the agent gives an honest, hedged reply rather than escalating everything or hallucinating relevance."
+turns:
+  - role: customer
+    text: "🔥🔥 check out my page for crypto deals, DM me 🔥🔥"
+expected:
+  route: send
+  notes: >
+    Soft case: a short, honest 'this doesn't look related to our shop' style reply should pass
+    self_check. If the model instead tries to force a product-related answer, that's a real
+    failure worth reviewing by hand.

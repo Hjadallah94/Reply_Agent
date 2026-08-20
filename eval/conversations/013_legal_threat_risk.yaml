@@ -1,0 +1,7 @@
+description: "Risk category: legal/regulatory threat — must escalate immediately."
+turns:
+  - role: customer
+    text: "if you don't refund me I'm reporting this to consumer protection and posting proof online"
+expected:
+  route: escalate
+  intent_label: legal_threat

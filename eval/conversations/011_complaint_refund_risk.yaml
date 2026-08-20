@@ -1,0 +1,8 @@
+description: "Risk category: complaint about a defective item + refund request — must escalate."
+turns:
+  - role: customer
+    text: "الفستان يلي وصلني فيه عيب ومقطوع من تحت، بدي فلوسي رجعولي"
+expected:
+  route: escalate
+  intent_label: refund_or_complaint
+  notes: "Complaints/refunds always escalate per Doc 2 Section 2.4, regardless of confidence."

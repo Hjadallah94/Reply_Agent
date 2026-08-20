@@ -1,0 +1,11 @@
+description: >
+  Vague, open-ended product-recommendation question — not a clean FAQ match. Expected to land
+  in classify_intent's mid-confidence band and route generate_response to Sonnet (Doc 2 Section
+  3.3). Not strictly asserted (we can't force a confidence value), but worth a manual look at
+  which model actually got used.
+turns:
+  - role: customer
+    text: "بصراحة مو متأكدة شو بدي، بدي شي مناسب لعرس بس مو غالي كتير، شو بتنصحوني؟"
+expected:
+  route: send
+  notes: "Watch draft_reply.model_used in the eval output — this is the case most likely to (correctly) use Sonnet rather than Haiku."

@@ -1,0 +1,7 @@
+description: "Size/stock question in English — tests exact stock-status grounding, not just price."
+turns:
+  - role: customer
+    text: "hey do you have the classic black abaya in size L?"
+expected:
+  route: send
+  notes: "Size L is out_of_stock for this product; M and S are in stock. Reply must not claim L is available."

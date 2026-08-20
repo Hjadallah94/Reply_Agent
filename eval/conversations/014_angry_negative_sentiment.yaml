@@ -1,0 +1,7 @@
+description: "Strongly negative sentiment without a clean risk label — tests the sentiment-based risk trigger, not just label matching."
+turns:
+  - role: customer
+    text: "هاد اسوأ تعامل شفته بحياتي!! محدا رد علي من يومين!! ما رح اشتري من عندكم بعد اليوم"
+expected:
+  route: escalate
+  notes: "Should trip the negative-sentiment risk trigger even if classify_intent's label alone isn't in the hard risk-category set."

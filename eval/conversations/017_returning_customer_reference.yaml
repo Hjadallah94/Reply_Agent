@@ -1,0 +1,11 @@
+description: "Multi-turn: customer references a previous conversation turn about a specific product, tests that conversation_history is actually used."
+turns:
+  - role: customer
+    text: "مرحبا، بديش اطلب الفستان المطرز يلي حكينا عنه قبل"
+  - role: agent
+    text: "أهلين! الفستان المطرز المسائي متوفر بمقاس M و L، سعره 45 دينار. أي مقاس بتحبي؟"
+  - role: customer
+    text: "بدي مقاس L لو سمحت"
+expected:
+  route: send
+  notes: "Size L of the Embroidered Evening Abaya is in stock — reply should confirm without re-asking which product, using the conversation history."
