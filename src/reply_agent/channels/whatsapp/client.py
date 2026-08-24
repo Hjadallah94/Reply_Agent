@@ -20,7 +20,7 @@ class WhatsAppSendError(RuntimeError):
 async def send_text_message(to: str, text: str) -> dict:
     settings = get_settings()
 
-    if settings.whatsapp_dry_run:
+    if settings.meta_dry_run:
         logger.info("[dry-run] WhatsApp send to %s: %s", to, text)
         return {"dry_run": True, "to": to, "text": text}
 

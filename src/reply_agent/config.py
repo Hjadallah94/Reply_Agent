@@ -28,11 +28,17 @@ class Settings(BaseSettings):
     whatsapp_webhook_verify_token: str = "change-me"
     meta_graph_api_version: str = "v21.0"
 
+    # Instagram Messaging and Messenger Platform are both accessed via the connected Facebook
+    # Page's access token (unlike WhatsApp's own phone-number-scoped token), and share one
+    # webhook verify token, separate from WhatsApp's own.
+    meta_page_access_token: str = ""
+    meta_webhook_verify_token: str = "change-me"
+
     owner_notification_whatsapp_number: str = ""
 
-    # When true, send_text_message logs instead of calling the real Graph API — used by the
-    # eval harness and local dev before real WhatsApp credentials exist.
-    whatsapp_dry_run: bool = False
+    # When true, every channel's send function logs instead of calling the real Graph API —
+    # used by the eval harness and local dev before real Meta credentials exist.
+    meta_dry_run: bool = False
 
     @property
     def is_production(self) -> bool:

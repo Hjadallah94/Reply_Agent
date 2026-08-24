@@ -11,14 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from reply_agent.db.models import Business, ChannelType, Conversation, ConversationStatus, Customer
 
+# The JSONB key under channels_connected[channel.value] that identifies a business for each
+# channel's webhook — WhatsApp is keyed by its Cloud API phone number, Instagram/Messenger by
+# the connected Facebook Page (both are accessed via that Page's access token).
+_BUSINESS_LOOKUP_FIELD: dict[ChannelType, str] = {
+    ChannelType.whatsapp: "phone_number_id",
+    ChannelType.instagram: "page_id",
+    ChannelType.messenger: "page_id",
+}
 
-async def find_business_by_whatsapp_phone_number_id(
-    session: AsyncSession, phone_number_id: str
+
+async def find_business_by_channel_key(
+    session: AsyncSession, channel: ChannelType, key: str
 ) -> Business | None:
+    field = _BUSINESS_LOOKUP_FIELD[channel]
     return await session.scalar(
-        select(Business).where(
-            Business.channels_connected["whatsapp"]["phone_number_id"].astext == phone_number_id
-        )
+        select(Business).where(Business.channels_connected[channel.value][field].astext == key)
     )
 
 

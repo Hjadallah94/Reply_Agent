@@ -39,7 +39,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       META_APP_SECRET: ci-test-secret
       WHATSAPP_WEBHOOK_VERIFY_TOKEN: ci-test-token
-      WHATSAPP_DRY_RUN: "true"
+      META_DRY_RUN: "true"
 
     steps:
       - uses: actions/checkout@v4

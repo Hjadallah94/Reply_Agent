@@ -45,9 +45,10 @@ def test_extracts_only_text_messages():
     messages = extract_text_messages(SAMPLE_PAYLOAD)
     assert len(messages) == 1
     assert messages[0].channel_message_id == "wamid.ABC123"
-    assert messages[0].from_wa_id == "962790000000"
-    assert messages[0].phone_number_id == "12345"
+    assert messages[0].customer_handle == "962790000000"
+    assert messages[0].business_lookup_key == "12345"
     assert messages[0].text == "كم سعرها؟"
+    assert messages[0].channel.value == "whatsapp"
 
 
 def test_empty_payload_returns_no_messages():

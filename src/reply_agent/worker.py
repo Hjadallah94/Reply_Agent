@@ -2,6 +2,10 @@
 wraps the actual async pipeline with asyncio.run() — everything below it (DB, Anthropic,
 LangGraph) is async throughout, matching the FastAPI webhook side.
 
+One job function handles every channel — each webhook normalizes into the same
+NormalizedInboundEvent shape (channels/common.py) before enqueueing, so nothing here needs to
+know or care which app the message came from (Doc 1's "one brain, three channels").
+
 Run with: uv run rq worker inbound_messages
 (or: uv run python -m reply_agent.worker for a quick local run)
 """
@@ -10,10 +14,10 @@ import asyncio
 import logging
 import sys
 
-from reply_agent.db.models import ChannelType
+from reply_agent.channels.common import NormalizedInboundEvent
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.context_resolution import (
-    find_business_by_whatsapp_phone_number_id,
+    find_business_by_channel_key,
     get_or_create_conversation,
     get_or_create_customer,
 )
@@ -30,19 +34,25 @@ if sys.platform == "win32":
 
 
 async def _process_inbound_message_async(payload: dict) -> None:
+    event = NormalizedInboundEvent.model_validate(payload)
+
     async with get_sessionmaker()() as session:
-        business = await find_business_by_whatsapp_phone_number_id(
-            session, payload["phone_number_id"]
+        business = await find_business_by_channel_key(
+            session, event.channel, event.business_lookup_key
         )
         if business is None:
-            logger.warning("No business found for phone_number_id=%s", payload["phone_number_id"])
+            logger.warning(
+                "No business found for channel=%s lookup_key=%s",
+                event.channel.value,
+                event.business_lookup_key,
+            )
             return
 
         customer = await get_or_create_customer(
-            session, business.id, ChannelType.whatsapp, payload["from_wa_id"]
+            session, business.id, event.channel, event.customer_handle
         )
         conversation = await get_or_create_conversation(
-            session, business.id, ChannelType.whatsapp, customer
+            session, business.id, event.channel, customer
         )
         await session.commit()
 
@@ -50,14 +60,14 @@ async def _process_inbound_message_async(payload: dict) -> None:
 
     initial_state: GraphState = {
         "business_id": business_id,
-        "channel": "whatsapp",
+        "channel": event.channel.value,
         "customer_id": str(customer.id),
         "thread_id": thread_id,
         "message": {
-            "text": payload["text"],
+            "text": event.text,
             "media_refs": [],
-            "received_at": payload["timestamp"],
-            "channel_message_id": payload["channel_message_id"],
+            "received_at": event.received_at,
+            "channel_message_id": event.channel_message_id,
         },
         "conversation_history": [],
         "customer_profile": {"past_orders": [], "preferences": {}, "prior_escalations": 0},

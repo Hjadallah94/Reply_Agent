@@ -44,7 +44,7 @@ uv run rq worker inbound_messages                 # graph worker (needs ANTHROPI
 ```
 
 To run the Jordanian Arabic/English evaluation set (`eval/conversations/`) against the real
-pipeline — costs real Anthropic + Voyage API calls, set `WHATSAPP_DRY_RUN=true` first so it
+pipeline — costs real Anthropic + Voyage API calls, set `META_DRY_RUN=true` first so it
 doesn't try to send real WhatsApp messages:
 
 ```bash
@@ -73,3 +73,14 @@ curl -X POST http://localhost:8000/businesses/{business_id}/knowledge/upload -F 
 
 Bad individual rows are skipped and reported back, not fatal to the rest of the sheet; a
 missing required column in a present sheet is a hard error for that sheet.
+
+### Instagram + Messenger channels (Doc 3 Phase 2)
+
+Both webhooks (`/webhooks/instagram`, `/webhooks/messenger`) normalize into the same
+`NormalizedInboundEvent` shape WhatsApp already used, so `worker.py` and the LangGraph pipeline
+don't know or care which app a message came from — genuinely one brain, three channels. Needs
+`META_PAGE_ACCESS_TOKEN` and `META_WEBHOOK_VERIFY_TOKEN` in `.env` (both channels are accessed
+via the connected Facebook Page's token, unlike WhatsApp's phone-number-scoped one). A
+business's `channels_connected` JSON needs an `"instagram"`/`"messenger"` key with a `page_id`
+for inbound routing to find it — not yet verified against a live payload (no Instagram/Messenger
+product set up in the Meta app yet), same caveat as WhatsApp had before Phase 1's live test.

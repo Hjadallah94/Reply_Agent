@@ -4,7 +4,7 @@ set... do not proceed until auto-resolution and escalation-precision targets are
 
 This is NOT a CI-safe unit test — it costs real API calls and needs a seeded business
 (run scripts/seed_business.py first) plus ANTHROPIC_API_KEY / VOYAGE_API_KEY set, with
-WHATSAPP_DRY_RUN=true so send/escalate notifications don't try to hit the real Graph API.
+META_DRY_RUN=true so send/escalate notifications don't try to hit the real Graph API.
 
 Usage: uv run python eval/run_eval.py
 """
