@@ -8,6 +8,7 @@ Run with: uv run rq worker inbound_messages
 
 import asyncio
 import logging
+import sys
 
 from reply_agent.db.models import ChannelType
 from reply_agent.db.session import get_sessionmaker
@@ -20,6 +21,12 @@ from reply_agent.graph.graph import run_graph
 from reply_agent.graph.state import GraphState
 
 logger = logging.getLogger(__name__)
+
+# psycopg's async driver (used by AsyncPostgresSaver, the LangGraph checkpointer) doesn't
+# support Windows' default ProactorEventLoop — only SelectorEventLoop. Must be set before any
+# event loop is created, so this runs at import time, not inside process_inbound_message.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 async def _process_inbound_message_async(payload: dict) -> None:

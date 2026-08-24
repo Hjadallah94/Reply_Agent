@@ -12,6 +12,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -89,9 +90,11 @@ class Business(Base):
     )
     brand_voice_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     escalation_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     knowledge_documents: Mapped[list["KnowledgeDocument"]] = relationship(
@@ -127,7 +130,7 @@ class KnowledgeDocument(Base):
     )
     source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     business: Mapped["Business"] = relationship(back_populates="knowledge_documents")
@@ -148,9 +151,11 @@ class Customer(Base):
     channel_handle: Mapped[str] = mapped_column(Text, nullable=False)
     profile_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     order_history_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     business: Mapped["Business"] = relationship(back_populates="customers")
@@ -183,9 +188,11 @@ class Conversation(Base):
     # LangGraph checkpointer thread id (channel + customer scoped) — links a conversation
     # row to its durable graph state without duplicating it (Doc 2 Section 2.3 / 4).
     thread_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     business: Mapped["Business"] = relationship(back_populates="conversations")
@@ -215,7 +222,9 @@ class Message(Base):
     model_used: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Meta's per-message id, used for webhook dedup/idempotency (Doc 2 Section 2.1).
     channel_message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
@@ -241,9 +250,11 @@ class Escalation(Base):
     )
     resolved_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolution_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    notified_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    resolution_time: Mapped[datetime | None] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="escalations")
 
@@ -261,7 +272,7 @@ class Subscription(Base):
     billing_status: Mapped[BillingStatus] = mapped_column(
         Enum(BillingStatus, name="billing_status"), nullable=False, default=BillingStatus.trialing
     )
-    period_start: Mapped[datetime | None] = mapped_column(nullable=True)
-    period_end: Mapped[datetime | None] = mapped_column(nullable=True)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     business: Mapped["Business"] = relationship(back_populates="subscription")

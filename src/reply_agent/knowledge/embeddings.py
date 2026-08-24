@@ -7,7 +7,9 @@ from reply_agent.config import get_settings
 
 @lru_cache
 def get_voyage_client() -> voyageai.Client:
-    return voyageai.Client(api_key=get_settings().voyage_api_key)
+    # Free-tier accounts (no payment method on file) are capped at 3 requests/minute — the
+    # client's built-in retry-with-backoff handles that transparently instead of erroring.
+    return voyageai.Client(api_key=get_settings().voyage_api_key, max_retries=5)
 
 
 def embed_documents(texts: list[str]) -> list[list[float]]:

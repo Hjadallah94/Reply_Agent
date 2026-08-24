@@ -16,6 +16,21 @@ target_metadata = Base.metadata
 # Alembic runs synchronously; use the psycopg (sync) URL rather than the app's asyncpg URL.
 config.set_main_option("sqlalchemy.url", get_settings().database_url_sync)
 
+# The LangGraph Postgres checkpointer (scripts/setup_checkpointer.py) owns its own tables in
+# this same database — Alembic must never generate drop/create migrations for them.
+_CHECKPOINTER_TABLES = {
+    "checkpoints",
+    "checkpoint_blobs",
+    "checkpoint_writes",
+    "checkpoint_migrations",
+}
+
+
+def include_object(object, name, type_, reflected, compare_to):  # noqa: A002
+    if type_ == "table" and name in _CHECKPOINTER_TABLES:
+        return False
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -24,6 +39,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -36,7 +52,9 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata, include_object=include_object
+        )
         with context.begin_transaction():
             context.run_migrations()
 

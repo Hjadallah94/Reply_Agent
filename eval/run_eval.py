@@ -24,6 +24,16 @@ from reply_agent.graph.graph import run_graph
 CONVERSATIONS_DIR = Path(__file__).parent / "conversations"
 BUSINESS_NAME = "Rose Abaya House"
 
+if sys.platform == "win32":
+    # psycopg's async driver (used by AsyncPostgresSaver, the LangGraph checkpointer) doesn't
+    # support Windows' default ProactorEventLoop — only SelectorEventLoop.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # Windows' console defaults to a legacy codepage (e.g. cp1252) that can't print Arabic
+    # text — without this, printing a drafted reply or an error containing it crashes the
+    # whole run instead of just that one line.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 
 async def run_one(conversation_id: str, convo: dict) -> dict:
     session_maker = get_sessionmaker()
@@ -86,12 +96,22 @@ async def run_one(conversation_id: str, convo: dict) -> dict:
 
 async def main() -> None:
     files = sorted(CONVERSATIONS_DIR.glob("*.yaml"))
+    # Optional: pass one or more conversation-id substrings to run a subset, e.g.
+    # `uv run python eval/run_eval.py 007 017` — avoids re-running the full paced set.
+    filters = sys.argv[1:]
+    if filters:
+        files = [f for f in files if any(flt in f.stem for flt in filters)]
     if not files:
         print(f"No conversation fixtures found in {CONVERSATIONS_DIR}")
         sys.exit(1)
 
     passed, failed = 0, 0
-    for path in files:
+    for i, path in enumerate(files):
+        if i > 0:
+            # Voyage's free tier (no payment method on file) caps at 3 requests/minute.
+            # The client retries on 429 (embeddings.py), but pacing here avoids burning
+            # through those retries needlessly on every run.
+            await asyncio.sleep(5)
         conversation_id = path.stem
         convo = yaml.safe_load(path.read_text(encoding="utf-8"))
         expected_route = convo["expected"]["route"]
@@ -119,6 +139,15 @@ async def main() -> None:
             f"{status}  {conversation_id}: expected={expected_route} "
             f"actual={actual_route} model={model_used}{draft_note}"
         )
+        if not ok:
+            intent = result.get("intent", {})
+            self_check = result.get("self_check", {})
+            print(f"       intent={intent.get('label')} confidence={intent.get('confidence')}")
+            print(
+                f"       self_check.passed={self_check.get('passed')} "
+                f"reason={self_check.get('reason')!r}"
+            )
+            print(f"       draft: {draft_text[:200]!r}")
 
     print(f"\n{passed}/{passed + failed} passed")
     sys.exit(0 if failed == 0 else 1)
