@@ -3,5 +3,14 @@ turns:
   - role: customer
     text: "لو ما لبقتلي العباية، بقدر ارجعها واخذ مصاري؟"
 expected:
-  route: send
-  notes: "Only exchanges within 3 days (unworn, tags on), no cash refunds — reply must not promise a refund."
+  route: escalate
+  intent_label: refund_or_complaint
+  has_draft: true
+  notes: >
+    Corrected after a real eval run: this phrasing ("can I return it and get my money back?")
+    legitimately reads as a refund request, not a neutral policy FAQ, so classify_intent
+    correctly labels it refund_or_complaint and the risk gate forces escalation — even though
+    the drafted reply itself was accurate and well-grounded (no cash refunds, exchange only).
+    Originally authored expecting route: send; that was a fixture-design mistake on my part,
+    not a code bug. A less refund-adjacent phrasing (e.g. "what's your return policy?") would
+    be a better test of the plain-FAQ path if that's still wanted as a separate case.

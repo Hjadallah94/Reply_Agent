@@ -1,0 +1,17 @@
+description: >
+  Neutral returns/exchange policy FAQ, phrased to avoid reading as an actual refund request
+  (unlike 008, corrected after a real eval run showed "get my money back" phrasing legitimately
+  triggers the refund_or_complaint risk category instead).
+turns:
+  - role: customer
+    text: "شو سياسة الاسترجاع أو الاستبدال عندكم؟"
+expected:
+  route: send
+  intent_label: policy_question
+  notes: >
+    Only exchanges within 3 days (unworn, tags on), no cash refunds — reply must not promise a
+    refund. Nominal expectation is "send" for a correct draft, but if this comes back as
+    "escalate" with self_check flagging a real policy contradiction (e.g. generate_response
+    flips "unworn" to "worn"), that is NOT a failure — it's the groundedness guardrail (Doc 1
+    Section 7) correctly catching a real generation-side hallucination. Worth noting as
+    generation-quality variance to watch, not a routing bug.

@@ -7,8 +7,10 @@ turns:
     text: "مرحبا، بدي اعرف وين صار طلبي يلي عملته امبارح؟"
 expected:
   route: escalate
+  intent_label: order_status
   has_draft: true
   notes: >
-    self_check should fail this (or needs_retry -> still nothing found -> escalate) because
-    there is no order data in the knowledge base to ground a status claim. This is the
-    self_check-triggered escalation path, not the risk gate.
+    Deterministic capability-gap escalation (risk_rules.py NO_CAPABILITY_LABELS), not a
+    self_check judgment call — order_status always escalates in Phase 1 regardless of how
+    honest/well-grounded the hedge reply is, since the agent structurally can't answer yet
+    (no order integration until Phase 2).

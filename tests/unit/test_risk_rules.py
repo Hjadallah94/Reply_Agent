@@ -1,4 +1,8 @@
-from reply_agent.graph.risk_rules import evaluate_risk_gate
+from reply_agent.graph.risk_rules import (
+    blocking_reason,
+    evaluate_capability_gap,
+    evaluate_risk_gate,
+)
 
 
 def make_intent(label="other", confidence=0.9, sentiment="neutral"):
@@ -41,3 +45,18 @@ def test_negative_sentiment_with_ordinary_label_gives_sentiment_reason():
     )
     assert reason is not None
     assert "sentiment" in reason.lower()
+
+
+def test_order_status_is_a_capability_gap_not_a_risk():
+    assert evaluate_risk_gate(make_intent(label="order_status")) is None
+    assert evaluate_capability_gap(make_intent(label="order_status")) is not None
+
+
+def test_ordinary_faq_has_no_capability_gap():
+    assert evaluate_capability_gap(make_intent(label="product_availability_price")) is None
+
+
+def test_blocking_reason_combines_risk_and_capability_gap():
+    assert blocking_reason(make_intent(label="legal_threat")) is not None
+    assert blocking_reason(make_intent(label="order_status")) is not None
+    assert blocking_reason(make_intent(label="product_availability_price")) is None

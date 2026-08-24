@@ -16,6 +16,18 @@ async def load_context(state: GraphState) -> dict:
         if conversation is None:
             raise ValueError(f"No conversation for thread_id={state['thread_id']!r}")
 
+        # Query prior turns BEFORE inserting the current message — conversation_history must
+        # exclude the message this run is currently processing (classify_intent/generate_response
+        # append state["message"]["text"] separately; inserting first would duplicate it).
+        prior_messages = (
+            await session.scalars(
+                select(Message)
+                .where(Message.conversation_id == conversation.id)
+                .order_by(Message.created_at.desc())
+                .limit(HISTORY_LIMIT)
+            )
+        ).all()
+
         # Idempotent insert: Meta retries undelivered webhooks, and the queue may redeliver too.
         await session.execute(
             pg_insert(Message)
@@ -27,15 +39,6 @@ async def load_context(state: GraphState) -> dict:
             )
             .on_conflict_do_nothing(constraint="uq_messages_channel_message_id")
         )
-
-        prior_messages = (
-            await session.scalars(
-                select(Message)
-                .where(Message.conversation_id == conversation.id)
-                .order_by(Message.created_at.desc())
-                .limit(HISTORY_LIMIT)
-            )
-        ).all()
 
         prior_escalation_count = await session.scalar(
             select(func.count())
