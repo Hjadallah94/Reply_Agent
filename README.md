@@ -16,9 +16,9 @@ Each document exists in two formats:
 
 ## Status
 
-Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and the start of Phase 2 (real
-catalog ingestion) are built — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
-full phase plan.
+Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and Phase 2 (real catalog
+ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built — see
+`03_Development_Deployment_Roadmap.md`, Section 1, for the full phase plan.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
 
@@ -84,3 +84,21 @@ via the connected Facebook Page's token, unlike WhatsApp's phone-number-scoped o
 business's `channels_connected` JSON needs an `"instagram"`/`"messenger"` key with a `page_id`
 for inbound routing to find it — not yet verified against a live payload (no Instagram/Messenger
 product set up in the Meta app yet), same caveat as WhatsApp had before Phase 1's live test.
+
+### Spreadsheet order-status sync (Doc 2 Section 2.6)
+
+A single `.xlsx` file with an `Orders` sheet — `order_reference`, `customer_phone`, `status`
+required; `customer_name`, `items_summary`, `order_date` optional. Phone numbers are normalized
+(`orders/phone.py`) to match how WhatsApp sends them (handles a local `07...` format, a `+`/`00`
+prefix, and Excel's habit of stripping a phone column's leading zero when it's stored as a
+number). A full replace per sync — re-run whenever the seller's order sheet changes.
+
+```bash
+uv run python scripts/sync_orders.py --file orders.xlsx --business "Rose Abaya House"
+# or: curl -X POST http://localhost:8000/businesses/{business_id}/orders/upload -F file=@orders.xlsx
+```
+
+Once synced, `order_status` questions are no longer an automatic capability-gap escalation —
+`retrieve_knowledge` looks up the customer's order by phone number (WhatsApp only; Instagram/
+Messenger customers aren't phone-identified) and, if found, grounds a normal auto-sendable
+reply. No match still escalates, same as before this existed.

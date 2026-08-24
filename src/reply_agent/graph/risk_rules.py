@@ -15,8 +15,9 @@ RISK_INTENT_LABELS = {
 # Not a risk category — these intents aren't sensitive, the agent just structurally can't
 # answer them yet. An honest "I don't know" hedge is technically true but doesn't actually
 # resolve the customer's need, so it shouldn't count as auto-resolved (Doc 1 Section 5).
-# order_status: no order-lookup capability until Phase 2's spreadsheet/storefront integration
-# (Doc 3 Phase 2). Revisit this once that integration exists.
+# order_status: resolved when retrieve_knowledge finds a matching order (Doc 2 Section 2.6's
+# spreadsheet sync) — see the order_found override below. Still a gap for every other business
+# without order data synced, or for a customer/order retrieve_knowledge can't find a match for.
 NO_CAPABILITY_LABELS = {"order_status"}
 
 
@@ -31,15 +32,26 @@ def evaluate_risk_gate(intent: Intent) -> str | None:
     return None
 
 
-def evaluate_capability_gap(intent: Intent) -> str | None:
+def evaluate_capability_gap(intent: Intent, *, order_found: bool = False) -> str | None:
     """Returns a human-readable escalation reason if the agent structurally lacks the data
-    to answer this intent yet, else None.
+    to answer this intent, else None. order_found is set by confidence_router/escalate_to_owner
+    from whether retrieve_knowledge's order lookup actually found something for this customer —
+    order_status is only a gap when it didn't.
     """
-    if intent["label"] in NO_CAPABILITY_LABELS:
-        return f"No {intent['label'].replace('_', ' ')} capability yet — needs a human answer"
-    return None
+    if intent["label"] not in NO_CAPABILITY_LABELS:
+        return None
+    if intent["label"] == "order_status" and order_found:
+        return None
+    return f"No {intent['label'].replace('_', ' ')} capability yet — needs a human answer"
 
 
-def blocking_reason(intent: Intent) -> str | None:
+def blocking_reason(intent: Intent, *, order_found: bool = False) -> str | None:
     """Combined check: any reason confidence_router must never choose 'send' for this intent."""
-    return evaluate_risk_gate(intent) or evaluate_capability_gap(intent)
+    return evaluate_risk_gate(intent) or evaluate_capability_gap(intent, order_found=order_found)
+
+
+def order_context_found(retrieved_context: list) -> bool:
+    """Whether retrieve_knowledge's order lookup (Doc 2 Section 2.6) actually found a match —
+    those entries are tagged with a "order:" source prefix, see graph/nodes/retrieve_knowledge.py.
+    """
+    return any(c["source"].startswith("order:") for c in retrieved_context)

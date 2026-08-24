@@ -14,7 +14,7 @@ from reply_agent.channels.whatsapp.client import send_text_message
 from reply_agent.config import get_settings
 from reply_agent.db.models import Conversation, ConversationStatus, Escalation
 from reply_agent.db.session import get_sessionmaker
-from reply_agent.graph.risk_rules import blocking_reason
+from reply_agent.graph.risk_rules import blocking_reason, order_context_found
 from reply_agent.graph.state import GraphState
 
 
@@ -22,7 +22,8 @@ def _escalation_reason(state: GraphState) -> str:
     # Prefer the risk/capability-gap reason when present — it's more actionable for the owner
     # than a self_check note, even if self_check happened to pass this particular draft.
     intent = state.get("intent")
-    reason = blocking_reason(intent) if intent else None
+    order_found = order_context_found(state.get("retrieved_context", []))
+    reason = blocking_reason(intent, order_found=order_found) if intent else None
     if reason:
         return reason
 

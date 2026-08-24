@@ -83,3 +83,31 @@ def test_confidence_router_never_sends_order_status_even_when_self_check_passes(
         "retrieval_attempts": 0,
     }
     assert confidence_router(state) == "escalate"
+
+
+def test_confidence_router_sends_order_status_when_an_order_was_found():
+    """Doc 2 Section 2.6: once retrieve_knowledge finds a matching order, order_status is no
+    longer a capability gap — normal self_check-based routing applies."""
+    state = {
+        "intent": make_intent(label="order_status"),
+        "self_check": {
+            "passed": True,
+            "reason": "grounded in the order record",
+            "needs_retry": False,
+        },
+        "retrieval_attempts": 0,
+        "retrieved_context": [
+            {"source": "order:abc-123", "snippet": "status=shipped", "score": 1.0}
+        ],
+    }
+    assert confidence_router(state) == "send"
+
+
+def test_blocks_auto_send_false_for_order_status_with_order_context():
+    state = {
+        "intent": make_intent(label="order_status"),
+        "retrieved_context": [
+            {"source": "order:abc-123", "snippet": "status=shipped", "score": 1.0}
+        ],
+    }
+    assert blocks_auto_send(state) is False

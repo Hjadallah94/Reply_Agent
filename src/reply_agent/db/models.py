@@ -109,6 +109,9 @@ class Business(Base):
     subscription: Mapped["Subscription | None"] = relationship(
         back_populates="business", cascade="all, delete-orphan", uselist=False
     )
+    orders: Mapped[list["Order"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan"
+    )
 
 
 class KnowledgeDocument(Base):
@@ -136,6 +139,39 @@ class KnowledgeDocument(Base):
     business: Mapped["Business"] = relationship(back_populates="knowledge_documents")
 
     __table_args__ = (Index("ix_knowledge_documents_business_id", "business_id"),)
+
+
+class Order(Base):
+    """Spreadsheet-fallback order data (Doc 2 Section 2.6) — synced from a seller's order
+    sheet, not a live storefront API (that's Salla/Zid/Shopify, Phase 3+). Looked up by phone
+    number since that's how sellers actually track orders, which also happens to match
+    Customer.channel_handle for WhatsApp customers (orders/phone.py normalizes both sides).
+    """
+
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    order_reference: Mapped[str] = mapped_column(Text, nullable=False)
+    customer_phone: Mapped[str] = mapped_column(Text, nullable=False)
+    customer_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free text, not an enum — sellers use their own status vocabulary ("processing",
+    # "shipped", "على الطريق", ...); a spreadsheet fallback shouldn't force a fixed taxonomy.
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    items_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    business: Mapped["Business"] = relationship(back_populates="orders")
+
+    __table_args__ = (
+        UniqueConstraint("business_id", "order_reference", name="uq_order_reference"),
+        Index("ix_orders_business_id_customer_phone", "business_id", "customer_phone"),
+    )
 
 
 class Customer(Base):

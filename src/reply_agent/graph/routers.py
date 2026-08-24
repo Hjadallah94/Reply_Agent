@@ -10,14 +10,15 @@ block "send" the same way, for a different reason: not risk, just missing data.
 
 from typing import Literal
 
-from reply_agent.graph.risk_rules import blocking_reason
+from reply_agent.graph.risk_rules import blocking_reason, order_context_found
 from reply_agent.graph.state import GraphState
 
 MAX_RETRIEVAL_ATTEMPTS = 2
 
 
 def blocks_auto_send(state: GraphState) -> bool:
-    return blocking_reason(state["intent"]) is not None
+    order_found = order_context_found(state.get("retrieved_context", []))
+    return blocking_reason(state["intent"], order_found=order_found) is not None
 
 
 def confidence_router(state: GraphState) -> Literal["send", "retry", "escalate"]:
