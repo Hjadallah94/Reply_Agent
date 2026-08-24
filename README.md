@@ -40,7 +40,16 @@ To run the full pipeline locally:
 
 ```bash
 uv run uvicorn reply_agent.api.app:app --reload   # webhook receiver
-uv run rq worker inbound_messages                 # graph worker (needs ANTHROPIC_API_KEY, VOYAGE_API_KEY)
+uv run python scripts/run_worker.py               # graph worker (needs ANTHROPIC_API_KEY, VOYAGE_API_KEY)
+```
+
+Use `scripts/run_worker.py`, not the bare `rq worker inbound_messages` CLI — the CLI reads
+`REDIS_URL` from the OS environment rather than `.env` (so it silently connects to the wrong
+Redis), and its default fork-based worker crashes immediately on Windows (`os.fork()` doesn't
+exist there). The script fixes both: it uses our own settings for the Redis connection and
+picks a non-forking worker class on Windows.
+
+```bash
 ```
 
 To run the Jordanian Arabic/English evaluation set (`eval/conversations/`) against the real
