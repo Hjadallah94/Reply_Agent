@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Connect WhatsApp — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>Connect WhatsApp</h1>
+<p class="muted">This is Meta's own Embedded Signup flow. You'll log into Facebook, then pick or
+create the WhatsApp Business Account and phone number you want to connect.</p>
+
+{% if not config_id %}
+<div class="reason">Not configured yet — META_EMBEDDED_SIGNUP_CONFIG_ID is missing on the server.</div>
+{% endif %}
+
+<button id="connect-btn" {% if not config_id %}disabled{% endif %}>Connect WhatsApp</button>
+<p id="status" class="muted"></p>
+
+<div id="fb-root"></div>
+<script>
+  window.fbAsyncInit = function () {
+    FB.init({
+      appId: "{{ meta_app_id }}",
+      autoLogAppEvents: true,
+      xfbml: true,
+      version: "{{ graph_api_version }}",
+    });
+  };
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+
+<script>
+  const businessId = "{{ business.id }}";
+  const statusEl = document.getElementById("status");
+  let pendingSignupData = null;
+
+  // Meta posts this while the popup is still open, before FB.login's own callback fires with
+  // the exchangeable code — see onboarding/whatsapp_signup.py for why both pieces are needed.
+  window.addEventListener("message", (event) => {
+    if (!event.origin.endsWith("facebook.com")) return;
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH") {
+      pendingSignupData = data.data;
+    }
+  });
+
+  document.getElementById("connect-btn").addEventListener("click", () => {
+    FB.login(
+      (response) => {
+        if (!response.authResponse || !pendingSignupData) {
+          statusEl.textContent = "Connection was not completed.";
+          return;
+        }
+        statusEl.textContent = "Finishing setup...";
+        fetch("/onboarding/whatsapp/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            business_id: businessId,
+            code: response.authResponse.code,
+            phone_number_id: pendingSignupData.phone_number_id,
+            waba_id: pendingSignupData.waba_id,
+          }),
+        })
+          .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
+          .then(({ ok, body }) => {
+            statusEl.textContent = ok
+              ? "WhatsApp connected."
+              : "Something went wrong: " + (body.detail || "unknown error");
+          })
+          .catch(() => {
+            statusEl.textContent = "Something went wrong finishing setup.";
+          });
+      },
+      {
+        config_id: "{{ config_id }}",
+        response_type: "code",
+        override_default_response_type: true,
+        extras: { setup: {} },
+      }
+    );
+  });
+</script>
+{% endblock %}

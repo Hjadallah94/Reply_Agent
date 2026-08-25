@@ -22,11 +22,21 @@ class Settings(BaseSettings):
 
     meta_app_id: str = ""
     meta_app_secret: str = ""
+    # Our own Tech Provider System User token (Business Settings > System Users), shared across
+    # every onboarded business — not a per-number token. Meta grants it access to each customer's
+    # WABA as they complete Embedded Signup (onboarding/whatsapp_signup.py), so one value here
+    # covers every connected business's outbound sends (channels/whatsapp/client.py).
     whatsapp_access_token: str = ""
+    # Only our own demo/dev business's number — real businesses' numbers live in their own
+    # Business.channels_connected["whatsapp"]["phone_number_id"], not here.
     whatsapp_phone_number_id: str = ""
     whatsapp_business_account_id: str = ""
     whatsapp_webhook_verify_token: str = "change-me"
     meta_graph_api_version: str = "v21.0"
+    # "Facebook Login for Business" > Configurations entry using the WhatsApp Embedded Signup
+    # template (App Dashboard, created once manually — see README). Required for
+    # onboarding/whatsapp_signup.py's frontend trigger page to work at all.
+    meta_embedded_signup_config_id: str = ""
 
     # Instagram Messaging and Messenger Platform are both accessed via the connected Facebook
     # Page's access token (unlike WhatsApp's own phone-number-scoped token), and share one

@@ -2,7 +2,14 @@
 {% block title %}{{ business.name }} — Reply Agent{% endblock %}
 {% block content %}
 <a class="back" href="/dashboard">&larr; All businesses</a>
-<h1>{{ business.name }}</h1>
+<div class="row" style="align-items: baseline;">
+  <h1>{{ business.name }}</h1>
+  {% if business.channels_connected.whatsapp %}
+    <span class="badge resolved">WhatsApp connected</span>
+  {% else %}
+    <a class="export-link" href="/onboarding/whatsapp?business_id={{ business.id }}">Connect WhatsApp</a>
+  {% endif %}
+</div>
 
 <div class="card">
   <div class="row">

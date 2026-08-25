@@ -19,8 +19,9 @@ Each document exists in two formats:
 Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and Phase 2 (real catalog
 ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built. Phase 3
 (owner dashboard: escalation resolution, history export) is done. Phase 4 (billing &
-self-serve onboarding) has its first piece — usage metering against the tier caps — see
-`03_Development_Deployment_Roadmap.md`, Section 1, for the full phase plan.
+self-serve onboarding) has usage metering built, and WhatsApp Embedded Signup built but not
+yet live-tested (see below) — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
+full phase plan.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
 
@@ -146,3 +147,33 @@ lapses. Tier caps and overage rates (`billing/tiers.py`) are Doc 5 Section 2's n
 message rather than cutting the product off. The business dashboard shows a usage bar against the
 cap; deciding to actually *bill* for overage is the separate payment-collection piece of Phase 4,
 not yet built.
+
+### WhatsApp Embedded Signup (Doc 3 Phase 4, self-serve onboarding)
+
+Lets a business connect its own WhatsApp number from `/onboarding/whatsapp?business_id={id}`
+(linked from that business's dashboard page) instead of us doing it manually — Meta's own JS SDK
+popup flow (`templates/onboarding_whatsapp.html`), with the server-side completion
+(`onboarding/whatsapp_signup.py` + `api/onboarding.py`) exchanging the code, subscribing our app
+to the customer's WABA webhooks, and registering their phone number for Cloud API use.
+
+Building this required a prerequisite fix: `send_text_message` was hardcoded to one global phone
+number (fine for a single demo business); it now takes the sending business's own
+`phone_number_id` from `channels_connected`, while the access token stays one shared value — our
+own Tech Provider System User token, which Meta grants access to each customer's WABA as they
+complete this flow, rather than a separate token per business.
+
+**Two one-time manual steps in the Meta App Dashboard, not automatable:**
+1. **Business Settings → System Users** — create one (or use an existing one), generate a
+   long-lived access token with `whatsapp_business_management` + `whatsapp_business_messaging`,
+   set it as `WHATSAPP_ACCESS_TOKEN`.
+2. **App Dashboard → Facebook Login for Business → Configurations** — create one using the
+   *WhatsApp Embedded Signup* template, set its ID as `META_EMBEDDED_SIGNUP_CONFIG_ID`.
+
+**Not yet live-tested** — it can't be until both of the above exist and App Review clears for
+`whatsapp_business_management`/`whatsapp_business_messaging`. Built and verified as far as
+possible without that: unit tests mock Meta's HTTP responses for the three server-side calls,
+integration tests cover the callback saving `channels_connected` correctly, and the page itself
+renders correctly (confirmed live) including its "not configured" state. The actual Facebook
+Login popup and its postMessage payload shape have not been exercised against Meta's real
+servers — re-verify against Meta's current docs before relying on it, same caveat every other
+Meta integration in this project carried before its own first live test.

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from reply_agent.api.dashboard import router as dashboard_router
 from reply_agent.api.knowledge import router as knowledge_router
+from reply_agent.api.onboarding import router as onboarding_router
 from reply_agent.api.orders import router as orders_router
 from reply_agent.channels.instagram.webhook import router as instagram_router
 from reply_agent.channels.messenger.webhook import router as messenger_router
@@ -14,6 +15,7 @@ app.include_router(messenger_router)
 app.include_router(knowledge_router)
 app.include_router(orders_router)
 app.include_router(dashboard_router)
+app.include_router(onboarding_router)
 
 
 @app.get("/health")
