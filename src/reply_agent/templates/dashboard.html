@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ business.name }} — Reply Agent{% endblock %}
+{% block content %}
+<a class="back" href="/dashboard">&larr; All businesses</a>
+<h1>{{ business.name }}</h1>
+
+<h2>Needs your reply</h2>
+{% if pending_escalations %}
+  {% for e in pending_escalations %}
+  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/escalations/{{ e.id }}">
+    <div class="card">
+      <div class="row">
+        <strong>{{ e.customer_handle }}</strong>
+        <span class="badge pending">{{ e.channel }}</span>
+      </div>
+      <p class="muted" style="margin: 6px 0 0;">{{ e.reason }}</p>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">Nothing waiting on you right now.</p>
+{% endif %}
+
+<h2>Recent conversations</h2>
+{% if conversations %}
+  {% for c in conversations %}
+  <div class="card row">
+    <div>
+      <strong>{{ c.customer_handle }}</strong>
+      <p class="muted" style="margin: 4px 0 0;">{{ c.last_message_text or "—" }}</p>
+    </div>
+    <span class="badge {{ c.status }}">{{ c.status }}</span>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">No conversations yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ customer_handle }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ customer_handle }} <span class="muted">({{ channel }})</span></h1>
+
+<div class="reason">{{ escalation.reason }}</div>
+
+<div class="thread">
+  {% for m in messages %}
+  <div class="bubble {{ 'customer' if m.direction == 'inbound' else 'agent' }}">
+    {{ m.text }}
+    <span class="meta">{{ m.created_at }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="/businesses/{{ business.id }}/dashboard/escalations/{{ escalation.id }}/resolve">
+  <textarea name="reply_text" required>{{ escalation.drafted_reply or "" }}</textarea>
+  <button type="submit">Send reply</button>
+</form>
+{% endblock %}

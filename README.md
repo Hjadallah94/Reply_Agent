@@ -17,7 +17,8 @@ Each document exists in two formats:
 ## Status
 
 Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and Phase 2 (real catalog
-ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built — see
+ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built. Phase 3
+(owner dashboard) has its first piece — viewing and resolving escalations — see
 `03_Development_Deployment_Roadmap.md`, Section 1, for the full phase plan.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
@@ -111,3 +112,16 @@ Once synced, `order_status` questions are no longer an automatic capability-gap 
 `retrieve_knowledge` looks up the customer's order by phone number (WhatsApp only; Instagram/
 Messenger customers aren't phone-identified) and, if found, grounds a normal auto-sendable
 reply. No match still escalates, same as before this existed.
+
+### Owner dashboard (Doc 3 Phase 3, first slice)
+
+Server-rendered (Jinja2, no separate frontend build) at `/dashboard` → pick a business → see
+escalations that need a reply, with the drafted reply pre-filled into an editable box. Sending
+reuses the exact same channel-dispatch code (`graph/nodes/send_reply.py`) a real auto-send would
+go through, then logs the outbound message and resumes the conversation to `auto`. **No auth** —
+this is an internal MVP tool, not safe to expose publicly as-is.
+
+```bash
+uv run uvicorn reply_agent.api.app:app --reload
+# then open http://localhost:8000/dashboard
+```

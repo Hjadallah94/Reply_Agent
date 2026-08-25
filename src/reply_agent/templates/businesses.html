@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Businesses — Reply Agent{% endblock %}
+{% block content %}
+<h1>Businesses</h1>
+{% if businesses %}
+  {% for b in businesses %}
+  <a class="card-link" href="/businesses/{{ b.id }}/dashboard">
+    <div class="card row">
+      <div>
+        <strong>{{ b.name }}</strong>
+        <div class="muted">{{ b.plan_tier.value }}</div>
+      </div>
+      {% if b.pending_count %}<span class="badge pending">{{ b.pending_count }} pending</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">No businesses yet.</p>
+{% endif %}
+{% endblock %}
