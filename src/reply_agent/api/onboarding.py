@@ -1,8 +1,8 @@
-"""WhatsApp Embedded Signup (Doc 3 Phase 4): lets a business connect its own WhatsApp number
-without us doing it manually. Two halves: /onboarding/whatsapp (the trigger page, Meta's JS SDK
-popup — templates/onboarding_whatsapp.html) and the callback below that completes setup once
-the popup hands back a code. See onboarding/whatsapp_signup.py for what the callback actually
-does and what in this flow is unverified against Meta's real servers so far.
+"""Self-serve channel connection (Doc 3 Phase 4): lets a business connect its own WhatsApp
+number and/or Facebook Page without us doing it manually. Each channel is its own trigger page
+(Meta's JS SDK popup) plus a callback that completes setup once the popup hands back a code —
+see onboarding/whatsapp_signup.py and onboarding/page_signup.py for what each callback actually
+does and what in these flows is unverified against Meta's real servers so far.
 
 No auth — same internal-MVP caveat as the rest of the dashboard (api/dashboard.py).
 """
@@ -17,12 +17,13 @@ from pydantic import BaseModel
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
 from reply_agent.db.session import get_sessionmaker
-from reply_agent.onboarding.whatsapp_signup import (
-    EmbeddedSignupError,
-    exchange_code_for_token,
-    register_phone_number,
-    subscribe_app_to_waba,
+from reply_agent.onboarding.meta_oauth import EmbeddedSignupError, exchange_code_for_token
+from reply_agent.onboarding.page_signup import (
+    get_linked_instagram_account_id,
+    get_single_page_id,
+    subscribe_page_to_app,
 )
+from reply_agent.onboarding.whatsapp_signup import register_phone_number, subscribe_app_to_waba
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -79,3 +80,52 @@ async def whatsapp_signup_callback(payload: EmbeddedSignupPayload) -> dict:
         await session.commit()
 
     return {"connected": True}
+
+
+@router.get("/page")
+async def page_signup_page(request: Request, business_id: uuid.UUID):
+    async with get_sessionmaker()() as session:
+        business = await session.get(Business, business_id)
+        if business is None:
+            raise HTTPException(status_code=404, detail="Business not found")
+
+    settings = get_settings()
+    return templates.TemplateResponse(
+        request,
+        "onboarding_page.html",
+        {
+            "business": business,
+            "meta_app_id": settings.meta_app_id,
+            "config_id": settings.meta_page_signup_config_id,
+            "graph_api_version": settings.meta_graph_api_version,
+        },
+    )
+
+
+class PageSignupPayload(BaseModel):
+    business_id: uuid.UUID
+    code: str
+
+
+@router.post("/page/callback")
+async def page_signup_callback(payload: PageSignupPayload) -> dict:
+    async with get_sessionmaker()() as session:
+        business = await session.get(Business, payload.business_id)
+        if business is None:
+            raise HTTPException(status_code=404, detail="Business not found")
+
+        try:
+            token = await exchange_code_for_token(payload.code)
+            page_id = await get_single_page_id(token)
+            instagram_account_id = await get_linked_instagram_account_id(page_id, token)
+            await subscribe_page_to_app(page_id, token)
+        except EmbeddedSignupError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        channels_connected = {**business.channels_connected, "messenger": {"page_id": page_id}}
+        if instagram_account_id:
+            channels_connected["instagram"] = {"page_id": page_id}
+        business.channels_connected = channels_connected
+        await session.commit()
+
+    return {"connected": True, "instagram_connected": bool(instagram_account_id)}

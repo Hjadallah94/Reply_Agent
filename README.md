@@ -19,7 +19,8 @@ Each document exists in two formats:
 Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and Phase 2 (real catalog
 ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built. Phase 3
 (owner dashboard: escalation resolution, history export) is done. Phase 4 (billing &
-self-serve onboarding) has usage metering built, and WhatsApp Embedded Signup built but not
+self-serve onboarding) has usage metering built, and self-serve connection flows for all three
+channels (WhatsApp Embedded Signup, Facebook Page login for Messenger/Instagram) built but not
 yet live-tested (see below) — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
 full phase plan.
 
@@ -177,3 +178,33 @@ renders correctly (confirmed live) including its "not configured" state. The act
 Login popup and its postMessage payload shape have not been exercised against Meta's real
 servers — re-verify against Meta's current docs before relying on it, same caveat every other
 Meta integration in this project carried before its own first live test.
+
+### Facebook Page login for Messenger + Instagram (Doc 3 Phase 4, self-serve onboarding)
+
+The same self-serve idea for the other two channels, from `/onboarding/page?business_id={id}`
+(also linked from the dashboard) — but a different Meta flow than WhatsApp's: standard Facebook
+Login for Business rather than Embedded Signup, so the code comes straight back in `FB.login`'s
+own callback (no `WA_EMBEDDED_SIGNUP`-style postMessage event). One connection covers both
+channels — `onboarding/page_signup.py` checks whether the granted Page has a linked Instagram
+professional account (`instagram_business_account`) and sets `channels_connected` for both
+`"messenger"` and `"instagram"` when it does, since a seller only takes one real-world action
+(connect their Page) even though it's two channels internally. Shares the code-exchange step
+with WhatsApp's flow (`onboarding/meta_oauth.py`, moved out of `whatsapp_signup.py` once it
+turned out to be the same endpoint for both).
+
+Same prerequisite fix as WhatsApp's, applied to `send_page_message`: it took `/me/messages`
+(resolves against whichever identity `META_PAGE_ACCESS_TOKEN` happens to be scoped to) and now
+takes the business's own `page_id` and calls `/{page_id}/messages` instead.
+
+**MVP scope note:** a business that grants access to more than one Page during login gets a
+clear error rather than a picker UI — Doc 1's target seller has one Page; worth revisiting once
+real usage says otherwise.
+
+**One more one-time manual step**, in addition to the two WhatsApp already needed (the System
+User token is reused here — Facebook Login for Business grants that same system user access to
+the Page, same sharing model as WhatsApp's WABA): **App Dashboard → Facebook Login for
+Business → Configurations** — create a *second* configuration (Page login needs
+`pages_messaging`/`instagram_manage_messages`, a different permission set than WhatsApp
+Embedded Signup's), set its ID as `META_PAGE_SIGNUP_CONFIG_ID`.
+
+**Not yet live-tested**, same reasons and same caveat as WhatsApp's flow above.

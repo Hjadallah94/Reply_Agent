@@ -39,10 +39,15 @@ class Settings(BaseSettings):
     meta_embedded_signup_config_id: str = ""
 
     # Instagram Messaging and Messenger Platform are both accessed via the connected Facebook
-    # Page's access token (unlike WhatsApp's own phone-number-scoped token), and share one
-    # webhook verify token, separate from WhatsApp's own.
+    # Page — the same one shared System User token (see whatsapp_access_token above) works
+    # across every connected business's Page once Facebook Login for Business grants it access
+    # (onboarding/page_signup.py), not a separate token per business.
     meta_page_access_token: str = ""
     meta_webhook_verify_token: str = "change-me"
+    # A second, separate "Facebook Login for Business" Configuration (App Dashboard) — this one
+    # targeting Page + Instagram account assets with pages_messaging/instagram_manage_messages,
+    # not the WhatsApp Embedded Signup template used by meta_embedded_signup_config_id above.
+    meta_page_signup_config_id: str = ""
 
     owner_notification_whatsapp_number: str = ""
 

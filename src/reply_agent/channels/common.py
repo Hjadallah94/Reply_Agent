@@ -123,17 +123,24 @@ class MetaSendError(RuntimeError):
     pass
 
 
-async def send_page_message(to: str, text: str) -> dict:
+async def send_page_message(to: str, text: str, page_id: str) -> dict:
     """Messenger Send API — also used for Instagram Messaging (same endpoint shape, same Page
     access token, since IG messaging is accessed via the connected Facebook Page).
+
+    page_id is the sending business's own connected Page (Business.channels_connected) —
+    /{page_id}/messages, never the /me/ shorthand, or the send would resolve against whichever
+    identity settings.meta_page_access_token happens to be scoped to rather than this specific
+    business's Page (same reasoning as channels/whatsapp/client.py's phone_number_id parameter).
+    The token itself does stay one shared value: our Tech Provider System User token, granted
+    access to each connected Page via Facebook Login for Business (Doc 3 Phase 4).
     """
     settings = get_settings()
 
     if settings.meta_dry_run:
-        logger.info("[dry-run] Meta page send to %s: %s", to, text)
+        logger.info("[dry-run] Meta page send to %s via %s: %s", to, page_id, text)
         return {"dry_run": True, "to": to, "text": text}
 
-    url = f"https://graph.facebook.com/{settings.meta_graph_api_version}/me/messages"
+    url = f"https://graph.facebook.com/{settings.meta_graph_api_version}/{page_id}/messages"
     payload = {
         "recipient": {"id": to},
         "message": {"text": text},

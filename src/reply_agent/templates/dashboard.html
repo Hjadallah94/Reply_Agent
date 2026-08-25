@@ -2,12 +2,20 @@
 {% block title %}{{ business.name }} — Reply Agent{% endblock %}
 {% block content %}
 <a class="back" href="/dashboard">&larr; All businesses</a>
-<div class="row" style="align-items: baseline;">
-  <h1>{{ business.name }}</h1>
+<h1>{{ business.name }}</h1>
+<div class="row" style="justify-content: flex-start; gap: 10px; margin-bottom: 18px;">
   {% if business.channels_connected.whatsapp %}
     <span class="badge resolved">WhatsApp connected</span>
   {% else %}
     <a class="export-link" href="/onboarding/whatsapp?business_id={{ business.id }}">Connect WhatsApp</a>
+  {% endif %}
+  {% if business.channels_connected.messenger %}
+    <span class="badge resolved">Messenger connected</span>
+  {% else %}
+    <a class="export-link" href="/onboarding/page?business_id={{ business.id }}">Connect Facebook Page</a>
+  {% endif %}
+  {% if business.channels_connected.instagram %}
+    <span class="badge resolved">Instagram connected</span>
   {% endif %}
 </div>
 

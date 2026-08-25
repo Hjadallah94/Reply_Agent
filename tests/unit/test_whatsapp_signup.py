@@ -4,7 +4,6 @@ import pytest
 
 from reply_agent.onboarding.whatsapp_signup import (
     EmbeddedSignupError,
-    exchange_code_for_token,
     register_phone_number,
     subscribe_app_to_waba,
 )
@@ -26,22 +25,6 @@ def _mock_async_client(response):
     context.__aenter__ = AsyncMock(return_value=client)
     context.__aexit__ = AsyncMock(return_value=False)
     return context
-
-
-async def test_exchange_code_for_token_returns_access_token():
-    response = _response(200, {"access_token": "token-123"})
-    with patch("httpx.AsyncClient", return_value=_mock_async_client(response)):
-        token = await exchange_code_for_token("some-code")
-    assert token == "token-123"
-
-
-async def test_exchange_code_for_token_raises_on_error():
-    response = _response(400, text="bad code")
-    with (
-        patch("httpx.AsyncClient", return_value=_mock_async_client(response)),
-        pytest.raises(EmbeddedSignupError),
-    ):
-        await exchange_code_for_token("bad-code")
 
 
 async def test_subscribe_app_to_waba_succeeds():

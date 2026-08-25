@@ -40,6 +40,15 @@ async def get_whatsapp_phone_number_id(session: AsyncSession, business_id: uuid.
     return business.channels_connected["whatsapp"]["phone_number_id"]
 
 
+async def get_page_id(session: AsyncSession, business_id: uuid.UUID, channel: ChannelType) -> str:
+    """The sending business's own connected Page, for Instagram/Messenger — same reasoning as
+    get_whatsapp_phone_number_id above, one send-time lookup per business rather than a global
+    default.
+    """
+    business = await session.get(Business, business_id)
+    return business.channels_connected[channel.value]["page_id"]
+
+
 def build_thread_id(
     business_id: uuid.UUID, channel: ChannelType, customer_channel_handle: str
 ) -> str:

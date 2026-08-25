@@ -111,3 +111,108 @@ async def test_callback_502s_when_meta_call_fails(business):
             },
         )
     assert response.status_code == 502
+
+
+async def test_page_signup_page_renders(business):
+    client = TestClient(app)
+    response = client.get("/onboarding/page", params={"business_id": str(business.id)})
+    assert response.status_code == 200
+    assert business.name in response.text
+
+
+async def test_page_callback_saves_messenger_and_instagram(business):
+    client = TestClient(app)
+    with (
+        patch(
+            "reply_agent.api.onboarding.exchange_code_for_token",
+            new=AsyncMock(return_value="business-token"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_single_page_id",
+            new=AsyncMock(return_value="page-123"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_linked_instagram_account_id",
+            new=AsyncMock(return_value="ig-456"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.subscribe_page_to_app", new=AsyncMock()
+        ) as mock_subscribe,
+    ):
+        response = client.post(
+            "/onboarding/page/callback",
+            json={"business_id": str(business.id), "code": "the-code"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "instagram_connected": True}
+    mock_subscribe.assert_called_once_with("page-123", "business-token")
+
+    await get_engine().dispose()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
+        assert refreshed.channels_connected["instagram"] == {"page_id": "page-123"}
+
+
+async def test_page_callback_skips_instagram_when_not_linked(business):
+    client = TestClient(app)
+    with (
+        patch(
+            "reply_agent.api.onboarding.exchange_code_for_token",
+            new=AsyncMock(return_value="business-token"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_single_page_id",
+            new=AsyncMock(return_value="page-123"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_linked_instagram_account_id",
+            new=AsyncMock(return_value=None),
+        ),
+        patch("reply_agent.api.onboarding.subscribe_page_to_app", new=AsyncMock()),
+    ):
+        response = client.post(
+            "/onboarding/page/callback",
+            json={"business_id": str(business.id), "code": "the-code"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "instagram_connected": False}
+
+    await get_engine().dispose()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
+        assert "instagram" not in refreshed.channels_connected
+
+
+async def test_page_callback_502s_when_multiple_pages_granted(business):
+    client = TestClient(app)
+    with (
+        patch(
+            "reply_agent.api.onboarding.exchange_code_for_token",
+            new=AsyncMock(return_value="business-token"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_single_page_id",
+            new=AsyncMock(side_effect=EmbeddedSignupError("2 Pages were granted")),
+        ),
+    ):
+        response = client.post(
+            "/onboarding/page/callback",
+            json={"business_id": str(business.id), "code": "the-code"},
+        )
+
+    assert response.status_code == 502
+
+
+async def test_page_callback_404s_for_unknown_business():
+    client = TestClient(app)
+    response = client.post(
+        "/onboarding/page/callback",
+        json={"business_id": "00000000-0000-0000-0000-000000000000", "code": "code"},
+    )
+    assert response.status_code == 404

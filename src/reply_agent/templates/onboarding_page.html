@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Connect Facebook Page — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>Connect Facebook Page</h1>
+<p class="muted">Connects Messenger for your Page, and Instagram DMs too if an Instagram
+professional account is linked to it. You'll log into Facebook and grant access to a single
+Page — connecting more than one Page per business isn't supported yet.</p>
+
+{% if not config_id %}
+<div class="reason">Not configured yet — META_PAGE_SIGNUP_CONFIG_ID is missing on the server.</div>
+{% endif %}
+
+<button id="connect-btn" {% if not config_id %}disabled{% endif %}>Connect Facebook Page</button>
+<p id="status" class="muted"></p>
+
+<div id="fb-root"></div>
+<script>
+  window.fbAsyncInit = function () {
+    FB.init({
+      appId: "{{ meta_app_id }}",
+      autoLogAppEvents: true,
+      xfbml: true,
+      version: "{{ graph_api_version }}",
+    });
+  };
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+
+<script>
+  const businessId = "{{ business.id }}";
+  const statusEl = document.getElementById("status");
+
+  document.getElementById("connect-btn").addEventListener("click", () => {
+    FB.login(
+      (response) => {
+        if (!response.authResponse) {
+          statusEl.textContent = "Connection was not completed.";
+          return;
+        }
+        statusEl.textContent = "Finishing setup...";
+        fetch("/onboarding/page/callback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            business_id: businessId,
+            code: response.authResponse.code,
+          }),
+        })
+          .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
+          .then(({ ok, body }) => {
+            if (!ok) {
+              statusEl.textContent = "Something went wrong: " + (body.detail || "unknown error");
+              return;
+            }
+            statusEl.textContent = body.instagram_connected
+              ? "Messenger and Instagram connected."
+              : "Messenger connected. No Instagram account is linked to this Page.";
+          })
+          .catch(() => {
+            statusEl.textContent = "Something went wrong finishing setup.";
+          });
+      },
+      {
+        config_id: "{{ config_id }}",
+        response_type: "code",
+        override_default_response_type: true,
+      }
+    );
+  });
+</script>
+{% endblock %}
