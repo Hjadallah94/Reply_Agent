@@ -51,6 +51,7 @@ async def main() -> None:
 
         kb = load_knowledge_base(BUSINESS_SLUG)
         doc_count = await sync_knowledge_base(session, business_id, kb)
+        await session.commit()
 
     print(f"Seeded business {business_id} ({BUSINESS_NAME}) with {doc_count} knowledge documents.")
     if existing_user is None:

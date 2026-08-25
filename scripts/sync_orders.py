@@ -39,6 +39,7 @@ async def main() -> None:
             sys.exit(1)
 
         count = await sync_orders(session, business.id, records)
+        await session.commit()
 
     print(f"Synced {count} orders for {args.business!r}.")
     if issues:

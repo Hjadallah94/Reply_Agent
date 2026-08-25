@@ -23,8 +23,8 @@ from reply_agent.db.models import (
     Message,
     MessageDirection,
 )
-from reply_agent.db.session import get_engine, get_sessionmaker
-from tests.auth_helpers import create_logged_in_business
+from reply_agent.db.session import get_sessionmaker
+from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Dashboard Test Business"
 
@@ -81,13 +81,13 @@ async def escalation(client):
     # About to hand control to the test body, which makes its own TestClient calls — same
     # cross-loop issue as create_logged_in_business's own dispose, needed again here since
     # this fixture did more direct session work afterward.
-    await get_engine().dispose()
+    await dispose_engines()
     yield business, escalation
 
     # The test body made its own TestClient calls after this session block closed — same
     # cross-loop issue create_logged_in_business's own dispose handles, needed again here
     # before this fixture's own teardown DB access.
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == business.id))
         await session.commit()
@@ -156,7 +156,7 @@ async def test_resolve_sends_updates_db_and_redirects(client, escalation):
         to="962790001111", text="Edited final reply", phone_number_id="test-phone-number-id"
     )
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         refreshed = await session.get(Escalation, esc.id)
@@ -188,7 +188,7 @@ async def test_resolve_already_resolved_returns_409(client, escalation):
         db_escalation = await session.get(Escalation, esc.id)
         db_escalation.status = EscalationStatus.resolved
         await session.commit()
-    await get_engine().dispose()
+    await dispose_engines()
 
     with patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()):
         response = client.post(

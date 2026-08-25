@@ -1,9 +1,13 @@
 """SQLAlchemy models for the data model in Doc 2, Section 5.
 
-Tenant isolation (business_id on every tenant-scoped table) is enforced at the
-application query layer for now. Doc 2 Section 7 recommends Postgres row-level
-security as well; that has not been added yet and should be revisited before
-onboarding real seller data.
+Tenant isolation (business_id on every tenant-scoped table) is enforced at the application
+query layer, and — for the web-facing surface (api/dashboard.py, api/onboarding.py,
+api/knowledge.py, api/orders.py) — at the database level too, via Postgres row-level security
+(db/tenant_session.py, migrations/versions/325e6d70b285_*.py; README's "Row-level security"
+section has the full picture). The LangGraph pipeline (worker.py, graph/nodes/*) still relies
+on application-layer isolation only — its business_id always comes from a trusted internal
+lookup, not a value a request supplies directly — extending RLS there is a legitimate, larger
+follow-up, not yet done.
 """
 
 import enum

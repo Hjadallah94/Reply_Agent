@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
 from reply_agent.auth.dependencies import require_business_access
 from reply_agent.db.models import Business
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.knowledge.loader import sync_knowledge_base
 from reply_agent.knowledge.spreadsheet_ingest import WorkbookParseError, parse_catalog_workbook
 
@@ -26,7 +26,7 @@ async def upload_catalog(
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Expected a .xlsx workbook")
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             tmp.write(await file.read())
             tmp_path = Path(tmp.name)

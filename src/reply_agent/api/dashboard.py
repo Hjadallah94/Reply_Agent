@@ -1,7 +1,8 @@
 """Owner-facing dashboard (Doc 3 Phase 3): view conversations, approve/edit/send escalated
 replies. Server-rendered with Jinja2 rather than a separate frontend build. Every route below
 is gated by auth/dependencies.py's require_business_access — a logged-in user only ever sees
-their own business, never anyone else's.
+their own business, never anyone else's — and reads/writes through db/tenant_session.py, which
+enforces that same boundary again at the database level (row-level security, not just app code).
 """
 
 import uuid
@@ -29,7 +30,7 @@ from reply_agent.db.models import (
     Message,
     MessageDirection,
 )
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.send_reply import send_reply
 
 router = APIRouter(tags=["dashboard"])
@@ -47,9 +48,8 @@ async def dashboard_redirect(request: Request):
 async def business_dashboard(
     request: Request, business: Business = Depends(require_business_access)
 ):
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         subscription = await get_or_create_subscription(session, business)
-        await session.commit()
         usage = usage_summary(subscription)
 
         pending = (
@@ -108,7 +108,7 @@ async def business_dashboard(
 
 @router.get("/businesses/{business_id}/dashboard/export")
 async def export_conversations(business: Business = Depends(require_business_access)):
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         rows = (
             await session.execute(
                 select(Message, Conversation, Customer)
@@ -169,7 +169,7 @@ async def escalation_detail(
     escalation_id: uuid.UUID,
     business: Business = Depends(require_business_access),
 ):
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         escalation = await session.scalar(
             select(Escalation)
             .where(Escalation.id == escalation_id)
@@ -214,7 +214,7 @@ async def resolve_escalation(
     if not reply_text:
         raise HTTPException(status_code=400, detail="Reply text is required")
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         escalation = await session.scalar(
             select(Escalation)
             .where(Escalation.id == escalation_id)
@@ -253,7 +253,5 @@ async def resolve_escalation(
         escalation.resolution_text = reply_text
         escalation.resolution_time = datetime.now(UTC)
         conversation.status = ConversationStatus.auto
-
-        await session.commit()
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)

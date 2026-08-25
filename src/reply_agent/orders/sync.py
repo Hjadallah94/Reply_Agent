@@ -3,6 +3,8 @@ business on each sync (a full re-sync is simple and correct for a spreadsheet fa
 seller re-exports/re-uploads their sheet rather than us tracking incremental diffs), mirroring
 knowledge/loader.py's sync_knowledge_base. No embeddings involved — orders are looked up by
 exact phone match (graph/nodes/retrieve_knowledge.py), not vector similarity.
+
+Doesn't commit — the caller owns the transaction, same reasoning as sync_knowledge_base.
 """
 
 import uuid
@@ -32,5 +34,4 @@ async def sync_orders(
             )
         )
 
-    await session.commit()
     return len(records)

@@ -13,8 +13,8 @@ from sqlalchemy import delete
 
 from reply_agent.api.app import app
 from reply_agent.db.models import Business
-from reply_agent.db.session import get_engine, get_sessionmaker
-from tests.auth_helpers import create_logged_in_business
+from reply_agent.db.session import get_sessionmaker
+from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Knowledge Upload Test Business"
 
@@ -41,7 +41,7 @@ async def business(client):
     yield b
     # The test body made its own TestClient calls after create_logged_in_business's own
     # dispose — same cross-loop issue, dispose again before this fixture's own DB access.
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == b.id))
         await session.commit()

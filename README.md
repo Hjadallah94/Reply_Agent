@@ -24,7 +24,10 @@ channels (WhatsApp Embedded Signup, Facebook Page login for Messenger/Instagram)
 yet live-tested (see below) — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
 full phase plan. The dashboard and every per-business route now require a real login (see
 "Dashboard authentication" below) — this wasn't in the original phase plan, added once the
-dashboard itself existed and the gap became a real one, not a hypothetical.
+dashboard itself existed and the gap became a real one, not a hypothetical. That same web
+surface now also enforces tenant isolation at the database level, not just in application code
+(see "Row-level security" below) — `db/models.py` had flagged this as a pre-real-data gap since
+the data model was first written.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
 
@@ -246,3 +249,51 @@ inviting a second person yet), and a platform-admin view across all businesses (
 removed, not merely unbuilt — see "no self-serve business listing" above; if you need to
 operate across every business again, that's a distinct, separately-authorized role to design,
 not the same login a business owner gets).
+
+### Row-level security
+
+`db/models.py` has carried a warning since the data model was first written: tenant isolation
+was only enforced in application code (a `.where(business_id == ...)` some future route could
+forget to include), with Postgres row-level security flagged as something to add "before
+onboarding real seller data." This adds it — scoped to the web-facing surface for this first
+pass (`api/dashboard.py`, `api/onboarding.py`, `api/knowledge.py`, `api/orders.py`): the routes
+reachable from an authenticated request, where a forgotten filter would be a real,
+request-triggerable leak. The LangGraph pipeline (`worker.py`, `graph/nodes/*`) still uses
+`db/session.py`'s plain connection — its `business_id` always comes from a trusted internal
+lookup (a Meta webhook's own identifiers resolving to a business), never a value a request
+supplies directly to a query, so it isn't the same class of risk; bringing it under RLS too is
+a legitimate, separate, much larger follow-up.
+
+**The real finding that shaped this**: the `reply_agent` role (`docker-compose.yml`'s
+`POSTGRES_USER`) is a Postgres superuser and owns every table — row-level security has *no
+effect at all* on a superuser's queries, `FORCE ROW LEVEL SECURITY` included, no exceptions.
+Enabling RLS without addressing this would have changed nothing. A second, genuinely
+non-superuser role (`reply_agent_app`, `migrations/versions/325e6d70b285_*.py`) is what
+`db/tenant_session.py`'s connection actually authenticates as — verified directly (`rolsuper`,
+`rolbypassrls` both false) before writing a single policy, not assumed.
+
+- **How it works**: each of the four routers' handlers opens `tenant_session(business.id)`
+  (`db/tenant_session.py`) instead of the plain sessionmaker. It runs
+  `SELECT set_config('app.current_business_id', ..., true)` — the `true` mirrors `SET LOCAL`,
+  resetting at the end of that transaction so a pooled connection can never carry one request's
+  tenant context into the next — then every query in that `async with` block is filtered by
+  Postgres itself against `businesses`, `knowledge_documents`, `conversations`, `customers`,
+  `orders`, `subscriptions`, and (via a join through `conversation_id`, since neither has its
+  own `business_id` column) `messages` and `escalations`.
+- **Fails closed**: no context set (or a mismatched one) means zero rows back, not an error and
+  not every business's data — verified directly against Postgres, not just through the app.
+- **A real bug found and fixed while building this**: `current_setting(..., true)` returns an
+  empty string, not `NULL`, once a placeholder GUC has been referenced at least once in a
+  session and then reset — casting `''::uuid` raises rather than failing closed. Every policy
+  uses `NULLIF(current_setting(...), '')::uuid` to convert that back to a real `NULL` first.
+- **A quieter consequence**: `knowledge/loader.py`'s `sync_knowledge_base` and
+  `orders/sync.py`'s `sync_orders` used to commit internally. That's incompatible with
+  `tenant_session`'s one-transaction-per-request design (an early commit ends the transaction
+  the tenant context was scoped to, silently losing it for anything that runs after). Both now
+  leave committing to the caller — `scripts/ingest_catalog.py`, `scripts/sync_orders.py`, and
+  `scripts/seed_business.py` each gained one explicit `await session.commit()` as a result.
+- **Verified live**, not just in tests: a real signup, a real catalog upload (including a real
+  Voyage embedding call) through the RLS-enforced connection, and a direct SQL check confirming
+  the written row's `business_id` — plus dedicated tests that query with **no `business_id`
+  filter at all**, the exact bug class this exists to catch, confirming Postgres itself does
+  the filtering rather than the test happening to exercise already-correct application code.

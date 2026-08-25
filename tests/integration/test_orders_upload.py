@@ -12,8 +12,8 @@ from sqlalchemy import delete, select
 
 from reply_agent.api.app import app
 from reply_agent.db.models import Business, Order
-from reply_agent.db.session import get_engine, get_sessionmaker
-from tests.auth_helpers import create_logged_in_business
+from reply_agent.db.session import get_sessionmaker
+from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Orders Upload Test Business"
 
@@ -40,7 +40,7 @@ async def business(client):
     yield b
     # The test body made its own TestClient calls after create_logged_in_business's own
     # dispose — same cross-loop issue, dispose again before this fixture's own DB access.
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Order).where(Order.business_id == b.id))
         await session.execute(delete(Business).where(Business.id == b.id))
@@ -77,7 +77,7 @@ async def test_upload_syncs_orders(client, business):
     # TestClient ran the request through its own internal event loop; the connection pool
     # created there breaks if reused from this test's loop (same issue conftest.py's
     # autouse fixture handles between tests — here it's within one test, so dispose explicitly).
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         order = await session.scalar(select(Order).where(Order.business_id == business.id))

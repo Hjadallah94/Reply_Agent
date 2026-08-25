@@ -6,8 +6,20 @@ doesn't try to collect it).
 from reply_agent.auth.security import hash_password
 from reply_agent.db.models import Business, PlanTier, User
 from reply_agent.db.session import get_engine, get_sessionmaker
+from reply_agent.db.tenant_session import get_app_engine
 
 TEST_PASSWORD = "test-password-123"
+
+
+async def dispose_engines() -> None:
+    """FastAPI's TestClient runs the ASGI app on its own internal event loop (a separate
+    thread's portal, not pytest's) — a connection pool created on one loop breaks the moment a
+    later call tries to reuse it from the other. Two engines now (db/session.py's, for auth/
+    scripts/the graph pipeline, and tenant_session.py's RLS-enforced one, for the dashboard/
+    onboarding/upload routes) — dispose both at every loop transition, not just one.
+    """
+    await get_engine().dispose()
+    await get_app_engine().dispose()
 
 
 async def create_logged_in_business(client, name: str) -> Business:
@@ -29,17 +41,13 @@ async def create_logged_in_business(client, name: str) -> Business:
         await session.refresh(business)
         email = user.email
 
-    # TestClient.post runs the ASGI app on its own internal event loop (a separate thread's
-    # portal, not pytest's) — the connection pool from the direct session access just above,
-    # created on pytest's own loop, breaks the moment the login request tries to reuse it from
-    # that other loop. Dispose before the call, not just after.
-    await get_engine().dispose()
+    await dispose_engines()
 
     response = client.post(
         "/login", data={"email": email, "password": TEST_PASSWORD}, follow_redirects=False
     )
     assert response.status_code == 303, f"test login failed: {response.status_code}"
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     return business

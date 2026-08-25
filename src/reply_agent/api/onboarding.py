@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from reply_agent.auth.dependencies import ensure_business_access, require_business_access
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.onboarding.meta_oauth import EmbeddedSignupError, exchange_code_for_token
 from reply_agent.onboarding.page_signup import (
     get_linked_instagram_account_id,
@@ -60,7 +60,7 @@ class EmbeddedSignupPayload(BaseModel):
 async def whatsapp_signup_callback(request: Request, payload: EmbeddedSignupPayload) -> dict:
     await ensure_business_access(request, payload.business_id)
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(payload.business_id) as session:
         business = await session.get(Business, payload.business_id)
 
         try:
@@ -77,7 +77,6 @@ async def whatsapp_signup_callback(request: Request, payload: EmbeddedSignupPayl
                 "waba_id": payload.waba_id,
             },
         }
-        await session.commit()
 
     return {"connected": True}
 
@@ -106,7 +105,7 @@ class PageSignupPayload(BaseModel):
 async def page_signup_callback(request: Request, payload: PageSignupPayload) -> dict:
     await ensure_business_access(request, payload.business_id)
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(payload.business_id) as session:
         business = await session.get(Business, payload.business_id)
 
         try:
@@ -121,6 +120,5 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
         if instagram_account_id:
             channels_connected["instagram"] = {"page_id": page_id}
         business.channels_connected = channels_connected
-        await session.commit()
 
     return {"connected": True, "instagram_connected": bool(instagram_account_id)}

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
 from reply_agent.auth.dependencies import require_business_access
 from reply_agent.db.models import Business
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.orders.spreadsheet_ingest import OrderWorkbookParseError, parse_orders_workbook
 from reply_agent.orders.sync import sync_orders
 
@@ -24,7 +24,7 @@ async def upload_orders(
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Expected a .xlsx workbook")
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business.id) as session:
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             tmp.write(await file.read())
             tmp_path = Path(tmp.name)

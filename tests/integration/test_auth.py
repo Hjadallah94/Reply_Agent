@@ -10,8 +10,8 @@ from sqlalchemy.orm import selectinload
 from reply_agent.api.app import app
 from reply_agent.auth.security import hash_password
 from reply_agent.db.models import Business, User
-from reply_agent.db.session import get_engine, get_sessionmaker
-from tests.auth_helpers import TEST_PASSWORD, create_logged_in_business
+from reply_agent.db.session import get_sessionmaker
+from tests.auth_helpers import TEST_PASSWORD, create_logged_in_business, dispose_engines
 
 SIGNUP_EMAIL = "owner@rose-abaya.example"
 BUSINESS_NAME = "Rose Abaya Signup Test"
@@ -27,7 +27,7 @@ async def _cleanup():
     yield
     # Every test above made at least one TestClient call — same cross-loop issue
     # create_logged_in_business's own dispose handles, needed again before this teardown.
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(User).where(User.email == SIGNUP_EMAIL))
         await session.execute(delete(Business).where(Business.name == BUSINESS_NAME))
@@ -39,7 +39,7 @@ async def _user_for(business_name: str) -> User:
         user = await session.scalar(
             select(User).join(Business).where(Business.name == business_name)
         )
-    await get_engine().dispose()
+    await dispose_engines()
     return user
 
 
@@ -57,7 +57,7 @@ async def test_signup_creates_business_and_logs_in(client):
     assert response.headers["location"].startswith("/businesses/")
     assert response.headers["location"].endswith("/dashboard")
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         user = await session.scalar(
@@ -77,7 +77,7 @@ async def test_signup_rejects_duplicate_email(client):
         },
         follow_redirects=False,
     )
-    await get_engine().dispose()
+    await dispose_engines()
 
     response = client.post(
         "/signup",
@@ -105,7 +105,7 @@ async def test_login_succeeds_with_correct_credentials(client):
     # create_logged_in_business already logs in as a side effect of creating the account;
     # log out and back in explicitly to test /login itself in isolation.
     client.post("/logout")
-    await get_engine().dispose()
+    await dispose_engines()
 
     user = await _user_for(BUSINESS_NAME)
     response = client.post(
@@ -120,7 +120,7 @@ async def test_login_succeeds_with_correct_credentials(client):
 async def test_login_rejects_wrong_password(client):
     await create_logged_in_business(client, BUSINESS_NAME)
     client.post("/logout")
-    await get_engine().dispose()
+    await dispose_engines()
 
     user = await _user_for(BUSINESS_NAME)
     response = client.post("/login", data={"email": user.email, "password": "wrong-password"})
@@ -162,7 +162,7 @@ async def test_user_cannot_view_a_different_business_dashboard(client):
         await session.commit()
         email_b = user_b.email
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     other_client = TestClient(app)
     other_client.post(
@@ -170,13 +170,13 @@ async def test_user_cannot_view_a_different_business_dashboard(client):
         data={"email": email_b, "password": "other-password-123"},
         follow_redirects=False,
     )
-    await get_engine().dispose()
+    await dispose_engines()
 
     # Business B's user tries to view Business A's dashboard.
     response = other_client.get(f"/businesses/{business_a.id}/dashboard")
     assert response.status_code == 404
 
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(User).where(User.email == "other-owner@example.com"))
         await session.execute(delete(Business).where(Business.id == business_b.id))

@@ -38,6 +38,7 @@ async def main() -> None:
             sys.exit(1)
 
         doc_count = await sync_knowledge_base(session, business.id, kb)
+        await session.commit()
 
     print(
         f"Ingested {len(kb.products)} products, {len(kb.policies)} policies, "

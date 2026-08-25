@@ -42,7 +42,9 @@ def load_knowledge_base(business_slug: str) -> KnowledgeBase:
 
 async def sync_knowledge_base(session: AsyncSession, business_id, kb: KnowledgeBase) -> int:
     """Replaces all knowledge_documents rows for this business with the given KnowledgeBase.
-    Returns the number of documents written.
+    Returns the number of documents written. Doesn't commit — the caller owns the transaction
+    (a plain script commits once at the end; api/knowledge.py's tenant_session commits on its
+    own block exit, and committing here too would end that transaction early).
     """
     await session.execute(
         delete(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id)
@@ -76,7 +78,6 @@ async def sync_knowledge_base(session: AsyncSession, business_id, kb: KnowledgeB
         )
 
     if not entries:
-        await session.commit()
         return 0
 
     vectors = embed_documents([text for _, text, _ in entries])
@@ -91,5 +92,4 @@ async def sync_knowledge_base(session: AsyncSession, business_id, kb: KnowledgeB
             )
         )
 
-    await session.commit()
     return len(entries)

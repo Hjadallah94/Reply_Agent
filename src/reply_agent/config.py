@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     database_url_sync: str = (
         "postgresql+psycopg://reply_agent:reply_agent@localhost:5433/reply_agent"
     )
+    # A separate, non-superuser role (db/tenant_session.py) — the reply_agent role above owns
+    # every table and is a Postgres superuser, so row-level security policies have no effect on
+    # it at all (superusers always bypass RLS, no exceptions). Only the web-facing dashboard/
+    # onboarding/upload routes use this connection; everything else (migrations, the graph
+    # pipeline, scripts) keeps using database_url. Change the password before any real
+    # deployment — migrations/versions/325e6d70b285_*.py sets it, not this default.
+    database_url_app: str = (
+        "postgresql+asyncpg://reply_agent_app:reply_agent_app@localhost:5433/reply_agent"
+    )
 
     redis_url: str = "redis://localhost:6380/0"
 

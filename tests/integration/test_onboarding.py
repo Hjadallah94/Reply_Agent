@@ -12,9 +12,9 @@ from sqlalchemy import delete
 
 from reply_agent.api.app import app
 from reply_agent.db.models import Business
-from reply_agent.db.session import get_engine, get_sessionmaker
+from reply_agent.db.session import get_sessionmaker
 from reply_agent.onboarding.whatsapp_signup import EmbeddedSignupError
-from tests.auth_helpers import create_logged_in_business
+from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Onboarding Test Business"
 
@@ -30,7 +30,7 @@ async def business(client):
     yield b
     # The test body made its own TestClient calls after create_logged_in_business's own
     # dispose — same cross-loop issue, dispose again before this fixture's own DB access.
-    await get_engine().dispose()
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == b.id))
         await session.commit()
@@ -75,7 +75,7 @@ async def test_callback_saves_channels_connected(client, business):
     mock_subscribe.assert_called_once_with("waba-456", "business-token")
     mock_register.assert_called_once_with("phone-123", "business-token")
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         refreshed = await session.get(Business, business.id)
@@ -148,7 +148,7 @@ async def test_page_callback_saves_messenger_and_instagram(client, business):
     assert response.json() == {"connected": True, "instagram_connected": True}
     mock_subscribe.assert_called_once_with("page-123", "business-token")
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         refreshed = await session.get(Business, business.id)
@@ -180,7 +180,7 @@ async def test_page_callback_skips_instagram_when_not_linked(client, business):
     assert response.status_code == 200
     assert response.json() == {"connected": True, "instagram_connected": False}
 
-    await get_engine().dispose()
+    await dispose_engines()
 
     async with get_sessionmaker()() as session:
         refreshed = await session.get(Business, business.id)

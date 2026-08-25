@@ -70,9 +70,7 @@ def parse_orders_workbook(file) -> tuple[list[OrderRecord], list[str]]:
                 phone_raw = row.get("customer_phone")
                 status = str(row.get("status") or "").strip()
                 if not order_reference or not phone_raw or not status:
-                    raise ValueError(
-                        "order_reference, customer_phone, and status are all required"
-                    )
+                    raise ValueError("order_reference, customer_phone, and status are all required")
                 name = row.get("customer_name")
                 items = row.get("items_summary")
                 records.append(
