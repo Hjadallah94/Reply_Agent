@@ -125,3 +125,11 @@ this is an internal MVP tool, not safe to expose publicly as-is.
 uv run uvicorn reply_agent.api.app:app --reload
 # then open http://localhost:8000/dashboard
 ```
+
+Each business's dashboard also has a "Download as Excel" link
+(`/businesses/{business_id}/dashboard/export`) — every message across every conversation for
+that business, one row per message, sorted by customer then time: who sent it, the channel, the
+text, the classified intent, whether Claude or the owner handled it, and the conversation's
+status. This is the standing history export for a seller who has no CRM (Doc 1 explicitly defers
+real CRM/ERP integrations to a future paid tier); it reads the same `messages` table the
+dashboard and the graph itself already write to, so there's nothing new to keep in sync.

@@ -21,7 +21,10 @@
   <p class="empty">Nothing waiting on you right now.</p>
 {% endif %}
 
-<h2>Recent conversations</h2>
+<div class="row" style="align-items: baseline;">
+  <h2 style="margin: 28px 0 10px;">Recent conversations</h2>
+  <a class="export-link" href="/businesses/{{ business.id }}/dashboard/export">Download as Excel</a>
+</div>
 {% if conversations %}
   {% for c in conversations %}
   <div class="card row">

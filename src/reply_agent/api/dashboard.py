@@ -5,11 +5,14 @@ tool, not yet behind auth, so don't expose this route publicly as-is.
 
 import uuid
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +20,7 @@ from reply_agent.db.models import (
     Business,
     Conversation,
     ConversationStatus,
+    Customer,
     Escalation,
     EscalationStatus,
     Message,
@@ -113,6 +117,67 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
             "pending_escalations": pending_rows,
             "conversations": conversation_rows,
         },
+    )
+
+
+@router.get("/businesses/{business_id}/dashboard/export")
+async def export_conversations(business_id: uuid.UUID):
+    async with get_sessionmaker()() as session:
+        business = await session.get(Business, business_id)
+        if business is None:
+            raise HTTPException(status_code=404, detail="Business not found")
+
+        rows = (
+            await session.execute(
+                select(Message, Conversation, Customer)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .join(Customer, Conversation.customer_id == Customer.id)
+                .where(Conversation.business_id == business_id)
+                .order_by(Customer.channel_handle, Message.created_at)
+            )
+        ).all()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Conversations"
+    headers = [
+        "Customer",
+        "Channel",
+        "From",
+        "Message",
+        "Intent",
+        "Handled by",
+        "Conversation status",
+        "Sent at (UTC)",
+    ]
+    sheet.append(headers)
+    for message, conversation, customer in rows:
+        sheet.append(
+            [
+                customer.channel_handle,
+                conversation.channel.value,
+                "Customer" if message.direction == MessageDirection.inbound else "Agent",
+                message.text,
+                message.intent_label or "",
+                message.model_used or "",
+                conversation.status.value,
+                message.created_at.strftime("%Y-%m-%d %H:%M"),
+            ]
+        )
+
+    for i, width in enumerate([16, 11, 10, 60, 22, 16, 16, 16], start=1):
+        sheet.column_dimensions[get_column_letter(i)].width = width
+    sheet.freeze_panes = "A2"
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+
+    safe_name = "".join(c if c.isalnum() else "_" for c in business.name)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_conversations.xlsx"'},
     )
 
 

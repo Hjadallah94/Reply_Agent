@@ -2,10 +2,12 @@
 send, same pattern as tests/unit/test_send_reply.py.
 """
 
+from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 from sqlalchemy import delete, select
 
 from reply_agent.api.app import app
@@ -178,3 +180,38 @@ async def test_resolve_rejects_blank_reply(escalation):
         data={"reply_text": "   "},
     )
     assert response.status_code == 400
+
+
+async def test_export_returns_xlsx_with_messages(escalation):
+    business, _esc = escalation
+    client = TestClient(app)
+    response = client.get(f"/businesses/{business.id}/dashboard/export")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert "attachment" in response.headers["content-disposition"]
+
+    workbook = load_workbook(BytesIO(response.content))
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    assert rows[0] == (
+        "Customer",
+        "Channel",
+        "From",
+        "Message",
+        "Intent",
+        "Handled by",
+        "Conversation status",
+        "Sent at (UTC)",
+    )
+    assert rows[1][0] == "962790001111"
+    assert rows[1][2] == "Customer"
+    assert rows[1][3] == "Can I get a refund?"
+
+
+async def test_export_404s_for_unknown_business():
+    client = TestClient(app)
+    response = client.get("/businesses/00000000-0000-0000-0000-000000000000/dashboard/export")
+    assert response.status_code == 404
