@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reply_agent.db.models import Customer, KnowledgeDocType, KnowledgeDocument, Order
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.knowledge.embeddings import embed_query
 
@@ -60,7 +60,7 @@ async def _find_order_context(session: AsyncSession, state: GraphState) -> list[
 async def retrieve_knowledge(state: GraphState) -> dict:
     query_vector = embed_query(state["message"]["text"])
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(uuid.UUID(state["business_id"])) as session:
         distance = KnowledgeDocument.embedding_vector.cosine_distance(query_vector)
         rows = (
             await session.execute(

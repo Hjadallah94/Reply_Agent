@@ -13,7 +13,7 @@ from sqlalchemy import select
 from reply_agent.channels.whatsapp.client import send_text_message
 from reply_agent.config import get_settings
 from reply_agent.db.models import Conversation, ConversationStatus, Escalation
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.context_resolution import get_whatsapp_phone_number_id
 from reply_agent.graph.risk_rules import blocking_reason, order_context_found
 from reply_agent.graph.state import GraphState
@@ -40,7 +40,7 @@ async def escalate_to_owner(state: GraphState) -> dict:
 
     settings = get_settings()
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(uuid.UUID(state["business_id"])) as session:
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == state["thread_id"])
         )
@@ -72,8 +72,6 @@ async def escalate_to_owner(state: GraphState) -> dict:
                 text=owner_message,
                 phone_number_id=phone_number_id,
             )
-
-        await session.commit()
 
     return {
         "route": "escalate",

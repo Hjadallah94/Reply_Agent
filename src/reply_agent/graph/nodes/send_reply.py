@@ -4,7 +4,7 @@ from reply_agent.channels.instagram.client import send_text_message as send_inst
 from reply_agent.channels.messenger.client import send_text_message as send_messenger_message
 from reply_agent.channels.whatsapp.client import send_text_message as send_whatsapp_message
 from reply_agent.db.models import ChannelType
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.context_resolution import get_page_id, get_whatsapp_phone_number_id
 from reply_agent.graph.state import GraphState
 
@@ -19,17 +19,17 @@ async def send_reply(state: GraphState) -> dict:
     # built at import time would freeze the original references and ignore the patch.
     match state["channel"]:
         case "whatsapp":
-            async with get_sessionmaker()() as session:
+            async with tenant_session(business_id) as session:
                 phone_number_id = await get_whatsapp_phone_number_id(session, business_id)
             await send_whatsapp_message(
                 to=customer_handle, text=text, phone_number_id=phone_number_id
             )
         case "instagram":
-            async with get_sessionmaker()() as session:
+            async with tenant_session(business_id) as session:
                 page_id = await get_page_id(session, business_id, ChannelType.instagram)
             await send_instagram_message(to=customer_handle, text=text, page_id=page_id)
         case "messenger":
-            async with get_sessionmaker()() as session:
+            async with tenant_session(business_id) as session:
                 page_id = await get_page_id(session, business_id, ChannelType.messenger)
             await send_messenger_message(to=customer_handle, text=text, page_id=page_id)
         case other:

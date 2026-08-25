@@ -1,16 +1,18 @@
+import uuid
+
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from reply_agent.billing.usage import record_customer_message
 from reply_agent.db.models import Business, Conversation, Escalation, Message, MessageDirection
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import ConversationTurn, GraphState
 
 HISTORY_LIMIT = 10
 
 
 async def load_context(state: GraphState) -> dict:
-    async with get_sessionmaker()() as session:
+    async with tenant_session(uuid.UUID(state["business_id"])) as session:
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == state["thread_id"])
         )
@@ -52,8 +54,6 @@ async def load_context(state: GraphState) -> dict:
             .select_from(Escalation)
             .where(Escalation.conversation_id == conversation.id)
         )
-
-        await session.commit()
 
     history: list[ConversationTurn] = [
         {

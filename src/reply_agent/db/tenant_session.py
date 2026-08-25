@@ -1,17 +1,23 @@
-"""Row-level security for the web-facing surface (Doc 2 §7 flagged this as a pre-real-data gap
-— app-layer isolation, auth/dependencies.py, existed but nothing enforced it at the database
-itself). Scope: api/dashboard.py, api/onboarding.py, api/knowledge.py, api/orders.py — the
-routes reachable from an authenticated request where a forgotten business_id filter would be a
-real, request-triggerable tenant leak. The LangGraph pipeline (worker.py, graph/nodes/*) still
-uses db/session.py's plain get_sessionmaker() — its business_id always comes from a trusted
-internal lookup (a Meta webhook's own identifiers resolving to a business), never a value an
-outside request supplies directly to a query, so it isn't the same class of risk. Bringing the
-whole pipeline under RLS too is a legitimate follow-up, not this one — see
-migrations/versions/325e6d70b285_*.py for the full reasoning and the policies themselves.
+"""Row-level security, database-enforced tenant isolation (Doc 2 §7 flagged this as a
+pre-real-data gap — app-layer isolation existed, but nothing enforced it at the database
+itself). Used everywhere a business_id is known: api/dashboard.py, api/onboarding.py,
+api/knowledge.py, api/orders.py (where auth/dependencies.py's require_business_access resolves
+it from a logged-in user), and worker.py plus every graph/nodes/* module (where it comes from
+GraphState["business_id"], set once at the top of the pipeline by
+context_resolution.find_business_by_channel_key's lookup — the one place that genuinely has to
+search across every business, since which business owns a given webhook is exactly what that
+lookup exists to determine). See migrations/versions/325e6d70b285_*.py for the policies
+themselves and the reasoning behind the separate, non-superuser role this connects as (RLS has
+no effect at all on the plain reply_agent role — it's a Postgres superuser).
 
-Usage: routes that already resolve `business` via auth/dependencies.py's require_business_access
-open their session with tenant_session(business.id) instead of get_sessionmaker()() — everything
-else about using the session is identical.
+Not covered: the LangGraph checkpointer (memory/checkpointer.py's AsyncPostgresSaver) — a
+genuinely separate connection mechanism (psycopg via its own connection string, not this
+SQLAlchemy session pattern) with its own internal tables that aren't part of db/models.py at
+all and have no business_id column to filter on. Bringing it under RLS would be a distinct,
+larger piece of work, not an extension of this one.
+
+Usage: async with tenant_session(business_id) as session: — everything about using the session
+after that is identical to the plain get_sessionmaker()() pattern it replaces.
 """
 
 import uuid

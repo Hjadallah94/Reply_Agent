@@ -1,13 +1,12 @@
 """SQLAlchemy models for the data model in Doc 2, Section 5.
 
 Tenant isolation (business_id on every tenant-scoped table) is enforced at the application
-query layer, and — for the web-facing surface (api/dashboard.py, api/onboarding.py,
-api/knowledge.py, api/orders.py) — at the database level too, via Postgres row-level security
+query layer, and at the database level too, via Postgres row-level security
 (db/tenant_session.py, migrations/versions/325e6d70b285_*.py; README's "Row-level security"
-section has the full picture). The LangGraph pipeline (worker.py, graph/nodes/*) still relies
-on application-layer isolation only — its business_id always comes from a trusted internal
-lookup, not a value a request supplies directly — extending RLS there is a legitimate, larger
-follow-up, not yet done.
+section has the full picture) — both the web-facing API surface and the LangGraph pipeline
+(worker.py, graph/nodes/*) go through it. Not covered: the LangGraph checkpointer's own tables
+(memory/checkpointer.py) — a separate connection mechanism entirely, with no business_id column
+to filter on; extending RLS there would be distinct, larger follow-up work.
 """
 
 import enum

@@ -255,14 +255,20 @@ not the same login a business owner gets).
 `db/models.py` has carried a warning since the data model was first written: tenant isolation
 was only enforced in application code (a `.where(business_id == ...)` some future route could
 forget to include), with Postgres row-level security flagged as something to add "before
-onboarding real seller data." This adds it — scoped to the web-facing surface for this first
-pass (`api/dashboard.py`, `api/onboarding.py`, `api/knowledge.py`, `api/orders.py`): the routes
+onboarding real seller data." This adds it — first to the web-facing surface
+(`api/dashboard.py`, `api/onboarding.py`, `api/knowledge.py`, `api/orders.py`: the routes
 reachable from an authenticated request, where a forgotten filter would be a real,
-request-triggerable leak. The LangGraph pipeline (`worker.py`, `graph/nodes/*`) still uses
-`db/session.py`'s plain connection — its `business_id` always comes from a trusted internal
-lookup (a Meta webhook's own identifiers resolving to a business), never a value a request
-supplies directly to a query, so it isn't the same class of risk; bringing it under RLS too is
-a legitimate, separate, much larger follow-up.
+request-triggerable leak), then extended to the LangGraph pipeline too (`worker.py` and every
+`graph/nodes/*` module): every node opens `tenant_session(uuid.UUID(state["business_id"]))`
+instead of the plain connection, using the exact same role and policies the web surface
+already established — no second migration needed, since those policies were never actually
+scoped to *how* a query reaches them. The one place that can't be tenant-scoped is
+`context_resolution.find_business_by_channel_key` — the lookup that determines *which* business
+a webhook belongs to in the first place, so it necessarily searches across all of them, same
+reasoning as `api/auth.py`'s login-by-email query. Not covered: the LangGraph checkpointer
+(`memory/checkpointer.py`) — a genuinely separate connection mechanism with its own internal
+tables and no `business_id` column to filter on; bringing it under RLS would be distinct, larger
+follow-up work, not an extension of this one.
 
 **The real finding that shaped this**: the `reply_agent` role (`docker-compose.yml`'s
 `POSTGRES_USER`) is a Postgres superuser and owns every table — row-level security has *no
@@ -272,7 +278,7 @@ non-superuser role (`reply_agent_app`, `migrations/versions/325e6d70b285_*.py`) 
 `db/tenant_session.py`'s connection actually authenticates as — verified directly (`rolsuper`,
 `rolbypassrls` both false) before writing a single policy, not assumed.
 
-- **How it works**: each of the four routers' handlers opens `tenant_session(business.id)`
+- **How it works**: every covered route/node opens `tenant_session(business_id)`
   (`db/tenant_session.py`) instead of the plain sessionmaker. It runs
   `SELECT set_config('app.current_business_id', ..., true)` — the `true` mirrors `SET LOCAL`,
   resetting at the end of that transaction so a pooled connection can never carry one request's
@@ -292,8 +298,19 @@ non-superuser role (`reply_agent_app`, `migrations/versions/325e6d70b285_*.py`) 
   the tenant context was scoped to, silently losing it for anything that runs after). Both now
   leave committing to the caller — `scripts/ingest_catalog.py`, `scripts/sync_orders.py`, and
   `scripts/seed_business.py` each gained one explicit `await session.commit()` as a result.
+- **A second, unrelated bug this surfaced**: extending RLS to `worker.py` meant running three
+  real messages through the same worker process in a row for the first time — the second job
+  crashed outright ("Event loop is closed"). `process_inbound_message` wrapped each call in its
+  own `asyncio.run()`, creating and closing a fresh event loop every time, but `get_engine()`
+  and `get_app_engine()` are `@lru_cache`'d for the whole process's life — their connection
+  pools stayed bound to whichever loop was active the first time they were used. Pre-existing
+  (present before this change, in the plain connection too — RLS just made it visible sooner by
+  prompting more thorough live testing), fixed by giving the worker one event loop reused for
+  its whole lifetime instead of one per job.
 - **Verified live**, not just in tests: a real signup, a real catalog upload (including a real
-  Voyage embedding call) through the RLS-enforced connection, and a direct SQL check confirming
-  the written row's `business_id` — plus dedicated tests that query with **no `business_id`
-  filter at all**, the exact bug class this exists to catch, confirming Postgres itself does
-  the filtering rather than the test happening to exercise already-correct application code.
+  Voyage embedding call) through the RLS-enforced connection, a direct SQL check confirming the
+  written row's `business_id`, and three real WhatsApp messages (one of them a real escalation)
+  processed end to end through the fully RLS-wired pipeline in the same worker process, back to
+  back — plus dedicated tests that query with **no `business_id` filter at all**, the exact bug
+  class this exists to catch, confirming Postgres itself does the filtering rather than the
+  test happening to exercise already-correct application code.

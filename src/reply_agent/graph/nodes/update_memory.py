@@ -1,7 +1,9 @@
+import uuid
+
 from sqlalchemy import select
 
 from reply_agent.db.models import Conversation, Message, MessageDirection
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 
 
@@ -13,7 +15,7 @@ async def update_memory(state: GraphState) -> dict:
 
     intent = state.get("intent", {})
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(uuid.UUID(state["business_id"])) as session:
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == state["thread_id"])
         )
@@ -26,6 +28,5 @@ async def update_memory(state: GraphState) -> dict:
                 model_used=draft["model_used"],
             )
         )
-        await session.commit()
 
     return {}

@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select
 
 from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument
-from reply_agent.db.session import get_sessionmaker
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.llm.client import get_anthropic_client
 from reply_agent.llm.prompts.system import build_system_prompt
@@ -15,7 +15,7 @@ BRAND_VOICE_LIMIT = 5
 async def generate_response(state: GraphState) -> dict:
     business_id = uuid.UUID(state["business_id"])
 
-    async with get_sessionmaker()() as session:
+    async with tenant_session(business_id) as session:
         business = await session.get(Business, business_id)
         brand_voice_docs = (
             await session.scalars(
