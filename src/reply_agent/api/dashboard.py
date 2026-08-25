@@ -256,6 +256,7 @@ async def resolve_escalation(
         await send_reply(
             {
                 "channel": conversation.channel.value,
+                "business_id": str(conversation.business_id),
                 "thread_id": conversation.thread_id,
                 "draft_reply": {"text": reply_text},
             }

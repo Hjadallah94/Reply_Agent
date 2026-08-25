@@ -30,6 +30,16 @@ async def find_business_by_channel_key(
     )
 
 
+async def get_whatsapp_phone_number_id(session: AsyncSession, business_id: uuid.UUID) -> str:
+    """The sending business's own number — every outbound WhatsApp send must use this, never
+    a single global default, or every onboarded business's replies would go out under whichever
+    number happened to be configured (Doc 3 Phase 4: self-serve means many businesses, many
+    numbers, sharing one Tech Provider System User token).
+    """
+    business = await session.get(Business, business_id)
+    return business.channels_connected["whatsapp"]["phone_number_id"]
+
+
 def build_thread_id(
     business_id: uuid.UUID, channel: ChannelType, customer_channel_handle: str
 ) -> str:

@@ -14,6 +14,7 @@ from reply_agent.channels.whatsapp.client import send_text_message
 from reply_agent.config import get_settings
 from reply_agent.db.models import Conversation, ConversationStatus, Escalation
 from reply_agent.db.session import get_sessionmaker
+from reply_agent.graph.context_resolution import get_whatsapp_phone_number_id
 from reply_agent.graph.risk_rules import blocking_reason, order_context_found
 from reply_agent.graph.state import GraphState
 
@@ -38,13 +39,6 @@ async def escalate_to_owner(state: GraphState) -> dict:
     reason = _escalation_reason(state)
 
     settings = get_settings()
-    if settings.owner_notification_whatsapp_number:
-        owner_message = (
-            f"New escalation ({reason}).\n"
-            f"Customer said: {state['message']['text']}\n\n"
-            f"Drafted reply:\n{draft_text or '(no draft — reply from scratch)'}"
-        )
-        await send_text_message(to=settings.owner_notification_whatsapp_number, text=owner_message)
 
     async with get_sessionmaker()() as session:
         conversation = await session.scalar(
@@ -61,6 +55,24 @@ async def escalate_to_owner(state: GraphState) -> dict:
                 notified_at=datetime.now(UTC),
             )
         )
+
+        if settings.owner_notification_whatsapp_number:
+            # Notify from the same business's own number, not a global default (Doc 3 Phase 4:
+            # self-serve means many onboarded businesses, each with their own connected number).
+            phone_number_id = await get_whatsapp_phone_number_id(
+                session, uuid.UUID(state["business_id"])
+            )
+            owner_message = (
+                f"New escalation ({reason}).\n"
+                f"Customer said: {state['message']['text']}\n\n"
+                f"Drafted reply:\n{draft_text or '(no draft — reply from scratch)'}"
+            )
+            await send_text_message(
+                to=settings.owner_notification_whatsapp_number,
+                text=owner_message,
+                phone_number_id=phone_number_id,
+            )
+
         await session.commit()
 
     return {

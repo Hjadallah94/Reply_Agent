@@ -31,7 +31,11 @@ BUSINESS_NAME = "Dashboard Test Business"
 @pytest.fixture
 async def escalation():
     async with get_sessionmaker()() as session:
-        business = Business(name=BUSINESS_NAME, plan_tier=PlanTier.starter)
+        business = Business(
+            name=BUSINESS_NAME,
+            plan_tier=PlanTier.starter,
+            channels_connected={"whatsapp": {"phone_number_id": "test-phone-number-id"}},
+        )
         session.add(business)
         await session.flush()
 
@@ -126,7 +130,9 @@ async def test_resolve_sends_updates_db_and_redirects(escalation):
 
     assert response.status_code == 303
     assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
-    mock_send.assert_called_once_with(to="962790001111", text="Edited final reply")
+    mock_send.assert_called_once_with(
+        to="962790001111", text="Edited final reply", phone_number_id="test-phone-number-id"
+    )
 
     await get_engine().dispose()
 
