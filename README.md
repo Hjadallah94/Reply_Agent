@@ -18,7 +18,8 @@ Each document exists in two formats:
 
 Phase 0 (foundations), Phase 1 (single-channel WhatsApp MVP), and Phase 2 (real catalog
 ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are built. Phase 3
-(owner dashboard) has its first piece — viewing and resolving escalations — see
+(owner dashboard: escalation resolution, history export) is done. Phase 4 (billing &
+self-serve onboarding) has its first piece — usage metering against the tier caps — see
 `03_Development_Deployment_Roadmap.md`, Section 1, for the full phase plan.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
@@ -133,3 +134,15 @@ text, the classified intent, whether Claude or the owner handled it, and the con
 status. This is the standing history export for a seller who has no CRM (Doc 1 explicitly defers
 real CRM/ERP integrations to a future paid tier); it reads the same `messages` table the
 dashboard and the graph itself already write to, so there's nothing new to keep in sync.
+
+### Usage metering (Doc 5 Section 2, Doc 3 Phase 4 first slice)
+
+Every genuinely new inbound customer message (`billing/usage.py`, wired into
+`graph/nodes/load_context.py` at the same idempotent insert that already dedupes Meta's webhook
+retries) increments that business's `Subscription.message_usage_current_period`, auto-creating
+the subscription row on first use and rolling it over to a fresh 30-day period once the old one
+lapses. Tier caps and overage rates (`billing/tiers.py`) are Doc 5 Section 2's numbers as code —
+**this is a soft cap**: a business stays fully live past its cap, since Doc 5 prices overage per
+message rather than cutting the product off. The business dashboard shows a usage bar against the
+cap; deciding to actually *bill* for overage is the separate payment-collection piece of Phase 4,
+not yet built.

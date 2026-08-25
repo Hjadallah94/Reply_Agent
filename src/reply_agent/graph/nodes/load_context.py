@@ -1,7 +1,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from reply_agent.db.models import Conversation, Escalation, Message, MessageDirection
+from reply_agent.billing.usage import record_customer_message
+from reply_agent.db.models import Business, Conversation, Escalation, Message, MessageDirection
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.state import ConversationTurn, GraphState
 
@@ -29,7 +30,7 @@ async def load_context(state: GraphState) -> dict:
         ).all()
 
         # Idempotent insert: Meta retries undelivered webhooks, and the queue may redeliver too.
-        await session.execute(
+        insert_result = await session.execute(
             pg_insert(Message)
             .values(
                 conversation_id=conversation.id,
@@ -39,6 +40,12 @@ async def load_context(state: GraphState) -> dict:
             )
             .on_conflict_do_nothing(constraint="uq_messages_channel_message_id")
         )
+
+        # Only meter genuinely new messages (Doc 5 Section 2 caps) — a redelivered webhook for
+        # one already counted must not be charged twice.
+        if insert_result.rowcount:
+            business = await session.get(Business, conversation.business_id)
+            await record_customer_message(session, business)
 
         prior_escalation_count = await session.scalar(
             select(func.count())

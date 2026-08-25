@@ -4,6 +4,17 @@
 <a class="back" href="/dashboard">&larr; All businesses</a>
 <h1>{{ business.name }}</h1>
 
+<div class="card">
+  <div class="row">
+    <strong>Usage this period</strong>
+    {% if usage.over_cap %}<span class="badge pending">Over cap</span>{% endif %}
+  </div>
+  <div class="usage-bar">
+    <div class="usage-bar-fill" style="width: {{ ([usage.used / usage.cap * 100, 100] | min) }}%;"></div>
+  </div>
+  <p class="muted" style="margin: 6px 0 0;">{{ usage.used }} / {{ usage.cap }} messages</p>
+</div>
+
 <h2>Needs your reply</h2>
 {% if pending_escalations %}
   {% for e in pending_escalations %}

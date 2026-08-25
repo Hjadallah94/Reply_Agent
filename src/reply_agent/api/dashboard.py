@@ -16,6 +16,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
+from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.db.models import (
     Business,
     Conversation,
@@ -67,6 +68,10 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
         if business is None:
             raise HTTPException(status_code=404, detail="Business not found")
 
+        subscription = await get_or_create_subscription(session, business)
+        await session.commit()
+        usage = usage_summary(subscription)
+
         pending = (
             await session.scalars(
                 select(Escalation)
@@ -114,6 +119,7 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
         "dashboard.html",
         {
             "business": business,
+            "usage": usage,
             "pending_escalations": pending_rows,
             "conversations": conversation_rows,
         },
