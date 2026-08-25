@@ -20,6 +20,8 @@ from reply_agent.db.models import (
     Customer,
     Escalation,
     EscalationStatus,
+    KnowledgeDocType,
+    KnowledgeDocument,
     Message,
     MessageDirection,
 )
@@ -141,9 +143,15 @@ async def test_escalation_detail_shows_draft_and_reason(client, escalation):
 async def test_resolve_sends_updates_db_and_redirects(client, escalation):
     business, esc = escalation
 
-    with patch(
-        "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
-    ) as mock_send:
+    with (
+        patch(
+            "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
+        ) as mock_send,
+        patch(
+            "reply_agent.knowledge.corrections.embed_documents",
+            return_value=[[0.0] * 1024],
+        ),
+    ):
         response = client.post(
             f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
             data={"reply_text": "Edited final reply"},
@@ -175,6 +183,71 @@ async def test_resolve_sends_updates_db_and_redirects(client, escalation):
         )
         assert outbound.text == "Edited final reply"
         assert outbound.model_used == "owner"
+
+
+async def test_resolve_with_an_edited_reply_records_a_correction(client, escalation):
+    """Owner-correction feedback loop (Doc 1 Section 7) — sending something different from the
+    agent's own draft should be captured as a new brand_voice few-shot example.
+    """
+    business, esc = escalation
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch(
+            "reply_agent.knowledge.corrections.embed_documents",
+            return_value=[[0.0] * 1024],
+        ) as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
+            data={"reply_text": "Edited final reply"},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_called_once()
+    embedded_text = mock_embed.call_args[0][0][0]
+    assert "Can I get a refund?" in embedded_text
+    assert "Edited final reply" in embedded_text
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        correction = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.brand_voice,
+            )
+        )
+        assert correction is not None
+        assert correction.structured_data["source"] == "owner_correction"
+        assert correction.structured_data["escalation_id"] == str(esc.id)
+
+
+async def test_resolve_approving_the_draft_unchanged_records_no_correction(client, escalation):
+    business, esc = escalation
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch("reply_agent.knowledge.corrections.embed_documents") as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
+            data={"reply_text": esc.drafted_reply},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_not_called()
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        correction = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.brand_voice,
+            )
+        )
+        assert correction is None
 
 
 async def test_resolve_already_resolved_returns_409(client, escalation):

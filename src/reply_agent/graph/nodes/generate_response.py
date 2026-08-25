@@ -24,6 +24,10 @@ async def generate_response(state: GraphState) -> dict:
                     KnowledgeDocument.business_id == business_id,
                     KnowledgeDocument.type == KnowledgeDocType.brand_voice,
                 )
+                # Most-recent-first: without this, an unordered LIMIT returns an arbitrary 5
+                # once a business has more than that many — a real owner correction (Doc 1
+                # Section 7) could sit in the table forever and never actually reach a prompt.
+                .order_by(KnowledgeDocument.updated_at.desc())
                 .limit(BRAND_VOICE_LIMIT)
             )
         ).all()

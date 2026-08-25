@@ -32,6 +32,7 @@ from reply_agent.db.models import (
 )
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.send_reply import send_reply
+from reply_agent.knowledge.corrections import record_owner_correction
 
 router = APIRouter(tags=["dashboard"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -248,6 +249,30 @@ async def resolve_escalation(
                 model_used="owner",
             )
         )
+
+        # Owner-correction feedback loop (Doc 1 Section 7) — only when the owner actually sent
+        # something different from the agent's own draft (including drafting nothing at all, a
+        # capability-gap escalation): approving a draft unchanged isn't a correction, it's
+        # confirmation the agent already had it right, and doesn't need to teach it anything.
+        if reply_text != (escalation.drafted_reply or ""):
+            customer_message = await session.scalar(
+                select(Message)
+                .where(
+                    Message.conversation_id == conversation.id,
+                    Message.direction == MessageDirection.inbound,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            if customer_message is not None:
+                await record_owner_correction(
+                    session,
+                    business_id=business.id,
+                    customer_message=customer_message.text,
+                    corrected_reply=reply_text,
+                    escalation_id=escalation.id,
+                )
+
         escalation.status = EscalationStatus.resolved
         escalation.resolved_by = "owner"
         escalation.resolution_text = reply_text

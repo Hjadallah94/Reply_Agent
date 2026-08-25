@@ -24,10 +24,12 @@ channels (WhatsApp Embedded Signup, Facebook Page login for Messenger/Instagram)
 yet live-tested (see below) — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
 full phase plan. The dashboard and every per-business route now require a real login (see
 "Dashboard authentication" below) — this wasn't in the original phase plan, added once the
-dashboard itself existed and the gap became a real one, not a hypothetical. That same web
-surface now also enforces tenant isolation at the database level, not just in application code
-(see "Row-level security" below) — `db/models.py` had flagged this as a pre-real-data gap since
-the data model was first written.
+dashboard itself existed and the gap became a real one, not a hypothetical. That isolation is
+now enforced at the database level too, not just in application code (see "Row-level security"
+below) — `db/models.py` had flagged this as a pre-real-data gap since the data model was first
+written — covering both the dashboard and the LangGraph pipeline itself. Phase 3's
+owner-correction feedback loop (Doc 1 Section 7) is also done — see "Owner-correction feedback
+loop" below.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
 
@@ -314,3 +316,38 @@ non-superuser role (`reply_agent_app`, `migrations/versions/325e6d70b285_*.py`) 
   back — plus dedicated tests that query with **no `business_id` filter at all**, the exact bug
   class this exists to catch, confirming Postgres itself does the filtering rather than the
   test happening to exercise already-correct application code.
+
+### Owner-correction feedback loop
+
+Doc 1 Section 7: "Every owner correction on an escalated draft is captured and folds back into
+the knowledge base / few-shot examples — the agent gets better at this specific seller's voice
+without any model fine-tuning or retraining cost." Implemented by reusing the existing
+mechanism exactly, rather than building a second one: `generate_response.py` already pulls up
+to 5 `brand_voice`-type `KnowledgeDocument` rows as few-shot tone examples
+(`knowledge/loader.py`'s hand-authored samples). When `api/dashboard.py`'s `resolve_escalation`
+sees the owner send something different from the agent's own drafted reply — including a
+capability-gap escalation where there was no draft at all — `knowledge/corrections.py`'s
+`record_owner_correction` writes a new row in that same shape:
+`"Customer: {their message}\nSeller: {the owner's actual reply}"`, embedded the same way a
+hand-authored sample would be. Sending the draft unchanged is an approval, not a correction, and
+writes nothing — the agent already had it right.
+
+- **A real bug this exposed**: `generate_response.py`'s brand voice query was an unordered
+  `LIMIT 5` — harmless while every business had only a handful of hand-authored samples, but it
+  meant a genuine correction could sit in the table forever without ever actually reaching a
+  prompt once a business passed 5 total. Fixed with `ORDER BY updated_at DESC`, so the most
+  recent corrections always displace older examples first — verified directly against Postgres
+  (not assumed): with two real corrections in the table, both now rank ahead of every
+  pre-existing hand-authored sample in the exact query `generate_response.py` runs.
+- **Traceable, not just stored**: each correction's `structured_data` records
+  `{"source": "owner_correction", "escalation_id": ...}` — nothing queries this today (the
+  lookup is an unfiltered ordered `LIMIT`, not a search), but it's the difference between "we
+  can eventually tell what the agent has actually learned from real corrections" and not being
+  able to, for close to no cost now.
+- **Verified live**, not just in tests: two real escalations resolved with genuinely edited
+  replies — one fixing exactly the detail `self_check` had flagged as missing, sent through
+  `httpx` directly rather than a shell command, since the first attempt exposed a `curl`/Bash
+  argument-encoding artifact (the Arabic text arrived corrupted at the server) that turned out
+  to be nothing to do with this feature — both landed with correct UTF-8 content, a real Voyage
+  embedding, and the right `structured_data`, and both now rank first in `generate_response.py`'s
+  actual query.
