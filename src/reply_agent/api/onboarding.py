@@ -4,16 +4,19 @@ number and/or Facebook Page without us doing it manually. Each channel is its ow
 see onboarding/whatsapp_signup.py and onboarding/page_signup.py for what each callback actually
 does and what in these flows is unverified against Meta's real servers so far.
 
-No auth — same internal-MVP caveat as the rest of the dashboard (api/dashboard.py).
+Gated by auth/dependencies.py, same as api/dashboard.py — the GET pages via Depends(), the POST
+callbacks via ensure_business_access() since business_id there is a JSON body field, not a path/
+query param FastAPI's dependency injection can see.
 """
 
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from reply_agent.auth.dependencies import ensure_business_access, require_business_access
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
 from reply_agent.db.session import get_sessionmaker
@@ -30,12 +33,9 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 
 
 @router.get("/whatsapp")
-async def whatsapp_signup_page(request: Request, business_id: uuid.UUID):
-    async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
+async def whatsapp_signup_page(
+    request: Request, business: Business = Depends(require_business_access)
+):
     settings = get_settings()
     return templates.TemplateResponse(
         request,
@@ -57,11 +57,11 @@ class EmbeddedSignupPayload(BaseModel):
 
 
 @router.post("/whatsapp/callback")
-async def whatsapp_signup_callback(payload: EmbeddedSignupPayload) -> dict:
+async def whatsapp_signup_callback(request: Request, payload: EmbeddedSignupPayload) -> dict:
+    await ensure_business_access(request, payload.business_id)
+
     async with get_sessionmaker()() as session:
         business = await session.get(Business, payload.business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
 
         try:
             token = await exchange_code_for_token(payload.code)
@@ -83,12 +83,7 @@ async def whatsapp_signup_callback(payload: EmbeddedSignupPayload) -> dict:
 
 
 @router.get("/page")
-async def page_signup_page(request: Request, business_id: uuid.UUID):
-    async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
+async def page_signup_page(request: Request, business: Business = Depends(require_business_access)):
     settings = get_settings()
     return templates.TemplateResponse(
         request,
@@ -108,11 +103,11 @@ class PageSignupPayload(BaseModel):
 
 
 @router.post("/page/callback")
-async def page_signup_callback(payload: PageSignupPayload) -> dict:
+async def page_signup_callback(request: Request, payload: PageSignupPayload) -> dict:
+    await ensure_business_access(request, payload.business_id)
+
     async with get_sessionmaker()() as session:
         business = await session.get(Business, payload.business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
 
         try:
             token = await exchange_code_for_token(payload.code)

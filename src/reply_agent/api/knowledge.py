@@ -1,14 +1,16 @@
-"""Catalog upload endpoint (Doc 3 Phase 2). No owner dashboard exists yet (Phase 3) — this is
-the API half of the ingestion pipeline, ready for that dashboard to call once it exists. The
-CLI (scripts/ingest_catalog.py) uses the same parse_catalog_workbook/sync_knowledge_base pair.
+"""Catalog upload endpoint (Doc 3 Phase 2). No owner dashboard UI calls this yet (would be a
+natural Phase 3 addition to api/dashboard.py) — for now it's the API half of the ingestion
+pipeline, ready for that UI. The CLI (scripts/ingest_catalog.py) uses the same
+parse_catalog_workbook/sync_knowledge_base pair. Gated by auth/dependencies.py like the rest
+of the per-business surface.
 """
 
 import tempfile
-import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
+from reply_agent.auth.dependencies import require_business_access
 from reply_agent.db.models import Business
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.knowledge.loader import sync_knowledge_base
@@ -18,15 +20,13 @@ router = APIRouter(prefix="/businesses", tags=["knowledge"])
 
 
 @router.post("/{business_id}/knowledge/upload")
-async def upload_catalog(business_id: uuid.UUID, file: UploadFile) -> dict:
+async def upload_catalog(
+    file: UploadFile, business: Business = Depends(require_business_access)
+) -> dict:
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Expected a .xlsx workbook")
 
     async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             tmp.write(await file.read())
             tmp_path = Path(tmp.name)

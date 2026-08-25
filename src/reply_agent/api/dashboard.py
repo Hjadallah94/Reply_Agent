@@ -1,6 +1,7 @@
 """Owner-facing dashboard (Doc 3 Phase 3): view conversations, approve/edit/send escalated
-replies. Server-rendered with Jinja2 rather than a separate frontend build — an internal MVP
-tool, not yet behind auth, so don't expose this route publicly as-is.
+replies. Server-rendered with Jinja2 rather than a separate frontend build. Every route below
+is gated by auth/dependencies.py's require_business_access — a logged-in user only ever sees
+their own business, never anyone else's.
 """
 
 import uuid
@@ -8,14 +9,15 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from reply_agent.auth.dependencies import get_current_user, require_business_access
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.db.models import (
     Business,
@@ -35,39 +37,17 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 
 
 @router.get("/dashboard")
-async def list_businesses(request: Request):
-    async with get_sessionmaker()() as session:
-        businesses = (await session.scalars(select(Business).order_by(Business.name))).all()
-        pending_counts = dict(
-            (
-                await session.execute(
-                    select(Conversation.business_id, func.count())
-                    .join(Escalation, Escalation.conversation_id == Conversation.id)
-                    .where(Escalation.status == EscalationStatus.pending)
-                    .group_by(Conversation.business_id)
-                )
-            ).all()
-        )
-
-    rows = [
-        {
-            "id": b.id,
-            "name": b.name,
-            "plan_tier": b.plan_tier,
-            "pending_count": pending_counts.get(b.id, 0),
-        }
-        for b in businesses
-    ]
-    return templates.TemplateResponse(request, "businesses.html", {"businesses": rows})
+async def dashboard_redirect(request: Request):
+    # No multi-business list — a user has exactly one business, straight there or to /login.
+    user = await get_current_user(request)
+    return RedirectResponse(url=f"/businesses/{user.business_id}/dashboard", status_code=303)
 
 
 @router.get("/businesses/{business_id}/dashboard")
-async def business_dashboard(request: Request, business_id: uuid.UUID):
+async def business_dashboard(
+    request: Request, business: Business = Depends(require_business_access)
+):
     async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
         subscription = await get_or_create_subscription(session, business)
         await session.commit()
         usage = usage_summary(subscription)
@@ -77,7 +57,7 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
                 select(Escalation)
                 .join(Conversation)
                 .where(
-                    Conversation.business_id == business_id,
+                    Conversation.business_id == business.id,
                     Escalation.status == EscalationStatus.pending,
                 )
                 .options(selectinload(Escalation.conversation).selectinload(Conversation.customer))
@@ -98,7 +78,7 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
         conversations = (
             await session.scalars(
                 select(Conversation)
-                .where(Conversation.business_id == business_id)
+                .where(Conversation.business_id == business.id)
                 .options(selectinload(Conversation.customer), selectinload(Conversation.messages))
                 .order_by(Conversation.updated_at.desc())
                 .limit(30)
@@ -127,18 +107,14 @@ async def business_dashboard(request: Request, business_id: uuid.UUID):
 
 
 @router.get("/businesses/{business_id}/dashboard/export")
-async def export_conversations(business_id: uuid.UUID):
+async def export_conversations(business: Business = Depends(require_business_access)):
     async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
         rows = (
             await session.execute(
                 select(Message, Conversation, Customer)
                 .join(Conversation, Message.conversation_id == Conversation.id)
                 .join(Customer, Conversation.customer_id == Customer.id)
-                .where(Conversation.business_id == business_id)
+                .where(Conversation.business_id == business.id)
                 .order_by(Customer.channel_handle, Message.created_at)
             )
         ).all()
@@ -188,12 +164,12 @@ async def export_conversations(business_id: uuid.UUID):
 
 
 @router.get("/businesses/{business_id}/dashboard/escalations/{escalation_id}")
-async def escalation_detail(request: Request, business_id: uuid.UUID, escalation_id: uuid.UUID):
+async def escalation_detail(
+    request: Request,
+    escalation_id: uuid.UUID,
+    business: Business = Depends(require_business_access),
+):
     async with get_sessionmaker()() as session:
-        business = await session.get(Business, business_id)
-        if business is None:
-            raise HTTPException(status_code=404, detail="Business not found")
-
         escalation = await session.scalar(
             select(Escalation)
             .where(Escalation.id == escalation_id)
@@ -202,7 +178,7 @@ async def escalation_detail(request: Request, business_id: uuid.UUID, escalation
                 selectinload(Escalation.conversation).selectinload(Conversation.messages),
             )
         )
-        if escalation is None or escalation.conversation.business_id != business_id:
+        if escalation is None or escalation.conversation.business_id != business.id:
             raise HTTPException(status_code=404, detail="Escalation not found")
 
         conversation = escalation.conversation
@@ -230,9 +206,9 @@ async def escalation_detail(request: Request, business_id: uuid.UUID, escalation
 
 @router.post("/businesses/{business_id}/dashboard/escalations/{escalation_id}/resolve")
 async def resolve_escalation(
-    business_id: uuid.UUID,
     escalation_id: uuid.UUID,
     reply_text: str = Form(...),
+    business: Business = Depends(require_business_access),
 ):
     reply_text = reply_text.strip()
     if not reply_text:
@@ -244,7 +220,7 @@ async def resolve_escalation(
             .where(Escalation.id == escalation_id)
             .options(selectinload(Escalation.conversation))
         )
-        if escalation is None or escalation.conversation.business_id != business_id:
+        if escalation is None or escalation.conversation.business_id != business.id:
             raise HTTPException(status_code=404, detail="Escalation not found")
         if escalation.status != EscalationStatus.pending:
             raise HTTPException(status_code=409, detail="Escalation already resolved")
@@ -280,4 +256,4 @@ async def resolve_escalation(
 
         await session.commit()
 
-    return RedirectResponse(url=f"/businesses/{business_id}/dashboard", status_code=303)
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)

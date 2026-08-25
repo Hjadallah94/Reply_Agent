@@ -125,12 +125,53 @@
     margin-top: 8px;
   }
   .usage-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+  .auth-form {
+    max-width: 360px;
+    margin: 60px auto 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .auth-form label { font-size: 13.5px; color: var(--text-muted); }
+  .auth-form input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14.5px;
+    margin-top: 4px;
+  }
+  .auth-form .error {
+    background: var(--pending-bg);
+    color: var(--pending-fg);
+    border-radius: 8px;
+    padding: 10px 13px;
+    font-size: 13.5px;
+  }
+  .auth-form .switch { font-size: 13.5px; color: var(--text-muted); text-align: center; }
+  .logout-form { margin-left: auto; }
+  .logout-form button {
+    margin-top: 0;
+    background: none;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .logout-form button:hover { color: var(--text); opacity: 1; border-color: var(--accent); }
 </style>
 </head>
 <body>
 <header>
   <a href="/dashboard">Reply Agent</a>
   {% if business %}<span class="biz">— {{ business.name }}</span>{% endif %}
+  {% if business %}
+  <form class="logout-form" method="post" action="/logout">
+    <button type="submit">Log out</button>
+  </form>
+  {% endif %}
 </header>
 <main>
 {% block content %}{% endblock %}

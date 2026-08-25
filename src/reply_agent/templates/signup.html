@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Sign up — Reply Agent{% endblock %}
+{% block content %}
+<form class="auth-form" method="post" action="/signup">
+  <h1>Create your account</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <label>Business name<input type="text" name="business_name" required autofocus></label>
+  <label>Email<input type="email" name="email" required></label>
+  <label>Password<input type="password" name="password" minlength="8" required></label>
+  <button type="submit">Create account</button>
+  <p class="switch">Already have an account? <a href="/login">Log in</a></p>
+</form>
+{% endblock %}

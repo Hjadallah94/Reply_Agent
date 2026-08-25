@@ -94,9 +94,7 @@ class TestMessagingWebhooks:
             patch("reply_agent.channels.common.enqueue_inbound_message") as mock_enqueue,
         ):
             client = TestClient(app)
-            response = client.post(
-                path, content=body, headers={"X-Hub-Signature-256": _sign(body)}
-            )
+            response = client.post(path, content=body, headers={"X-Hub-Signature-256": _sign(body)})
 
         assert response.status_code == 200
         mock_enqueue.assert_called_once()
@@ -112,9 +110,7 @@ class TestMessagingWebhooks:
             patch("reply_agent.channels.common.enqueue_inbound_message") as mock_enqueue,
         ):
             client = TestClient(app)
-            response = client.post(
-                path, content=body, headers={"X-Hub-Signature-256": _sign(body)}
-            )
+            response = client.post(path, content=body, headers={"X-Hub-Signature-256": _sign(body)})
 
         assert response.status_code == 200
         mock_enqueue.assert_not_called()
@@ -125,9 +121,7 @@ class TestMessagingWebhooks:
 
         with patch("reply_agent.channels.common.enqueue_inbound_message") as mock_enqueue:
             client = TestClient(app)
-            response = client.post(
-                path, content=body, headers={"X-Hub-Signature-256": _sign(body)}
-            )
+            response = client.post(path, content=body, headers={"X-Hub-Signature-256": _sign(body)})
 
         assert response.status_code == 200
         mock_enqueue.assert_not_called()

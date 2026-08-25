@@ -1,6 +1,7 @@
-"""WhatsApp Embedded Signup callback (Doc 3 Phase 4). Real DB; Meta's own API calls are mocked
-since this can't be exercised against Meta's real servers yet (no config_id / App Review
-pending) — see onboarding/whatsapp_signup.py.
+"""WhatsApp Embedded Signup + Facebook Page login callbacks (Doc 3 Phase 4). Real DB; Meta's own
+API calls are mocked since this can't be exercised against Meta's real servers yet (no config_id
+/ App Review pending) — see onboarding/whatsapp_signup.py and onboarding/page_signup.py. Gated
+by auth/dependencies.py, same as api/dashboard.py — tests log in via tests/auth_helpers.py.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -10,42 +11,45 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from reply_agent.api.app import app
-from reply_agent.db.models import Business, PlanTier
+from reply_agent.db.models import Business
 from reply_agent.db.session import get_engine, get_sessionmaker
 from reply_agent.onboarding.whatsapp_signup import EmbeddedSignupError
+from tests.auth_helpers import create_logged_in_business
 
 BUSINESS_NAME = "Onboarding Test Business"
 
 
 @pytest.fixture
-async def business():
+def client():
+    return TestClient(app)
+
+
+@pytest.fixture
+async def business(client):
+    b = await create_logged_in_business(client, BUSINESS_NAME)
+    yield b
+    # The test body made its own TestClient calls after create_logged_in_business's own
+    # dispose — same cross-loop issue, dispose again before this fixture's own DB access.
+    await get_engine().dispose()
     async with get_sessionmaker()() as session:
-        b = Business(name=BUSINESS_NAME, plan_tier=PlanTier.starter)
-        session.add(b)
-        await session.commit()
-        await session.refresh(b)
-        yield b
         await session.execute(delete(Business).where(Business.id == b.id))
         await session.commit()
 
 
-async def test_signup_page_renders(business):
-    client = TestClient(app)
+async def test_signup_page_renders(client, business):
     response = client.get("/onboarding/whatsapp", params={"business_id": str(business.id)})
     assert response.status_code == 200
     assert business.name in response.text
 
 
-async def test_signup_page_404s_for_unknown_business():
-    client = TestClient(app)
+async def test_signup_page_404s_for_unknown_business(client, business):
     response = client.get(
         "/onboarding/whatsapp", params={"business_id": "00000000-0000-0000-0000-000000000000"}
     )
     assert response.status_code == 404
 
 
-async def test_callback_saves_channels_connected(business):
-    client = TestClient(app)
+async def test_callback_saves_channels_connected(client, business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -81,8 +85,7 @@ async def test_callback_saves_channels_connected(business):
         }
 
 
-async def test_callback_404s_for_unknown_business():
-    client = TestClient(app)
+async def test_callback_404s_for_unknown_business(client, business):
     response = client.post(
         "/onboarding/whatsapp/callback",
         json={
@@ -95,8 +98,7 @@ async def test_callback_404s_for_unknown_business():
     assert response.status_code == 404
 
 
-async def test_callback_502s_when_meta_call_fails(business):
-    client = TestClient(app)
+async def test_callback_502s_when_meta_call_fails(client, business):
     with patch(
         "reply_agent.api.onboarding.exchange_code_for_token",
         new=AsyncMock(side_effect=EmbeddedSignupError("boom")),
@@ -113,15 +115,13 @@ async def test_callback_502s_when_meta_call_fails(business):
     assert response.status_code == 502
 
 
-async def test_page_signup_page_renders(business):
-    client = TestClient(app)
+async def test_page_signup_page_renders(client, business):
     response = client.get("/onboarding/page", params={"business_id": str(business.id)})
     assert response.status_code == 200
     assert business.name in response.text
 
 
-async def test_page_callback_saves_messenger_and_instagram(business):
-    client = TestClient(app)
+async def test_page_callback_saves_messenger_and_instagram(client, business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -156,8 +156,7 @@ async def test_page_callback_saves_messenger_and_instagram(business):
         assert refreshed.channels_connected["instagram"] == {"page_id": "page-123"}
 
 
-async def test_page_callback_skips_instagram_when_not_linked(business):
-    client = TestClient(app)
+async def test_page_callback_skips_instagram_when_not_linked(client, business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -189,8 +188,7 @@ async def test_page_callback_skips_instagram_when_not_linked(business):
         assert "instagram" not in refreshed.channels_connected
 
 
-async def test_page_callback_502s_when_multiple_pages_granted(business):
-    client = TestClient(app)
+async def test_page_callback_502s_when_multiple_pages_granted(client, business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -209,8 +207,7 @@ async def test_page_callback_502s_when_multiple_pages_granted(business):
     assert response.status_code == 502
 
 
-async def test_page_callback_404s_for_unknown_business():
-    client = TestClient(app)
+async def test_page_callback_404s_for_unknown_business(client, business):
     response = client.post(
         "/onboarding/page/callback",
         json={"business_id": "00000000-0000-0000-0000-000000000000", "code": "code"},

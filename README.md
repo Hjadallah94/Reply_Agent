@@ -22,7 +22,9 @@ ingestion, Instagram + Messenger channels, spreadsheet order-status sync) are bu
 self-serve onboarding) has usage metering built, and self-serve connection flows for all three
 channels (WhatsApp Embedded Signup, Facebook Page login for Messenger/Instagram) built but not
 yet live-tested (see below) — see `03_Development_Deployment_Roadmap.md`, Section 1, for the
-full phase plan.
+full phase plan. The dashboard and every per-business route now require a real login (see
+"Dashboard authentication" below) — this wasn't in the original phase plan, added once the
+dashboard itself existed and the gap became a real one, not a hypothetical.
 
 Pricing, message-volume assumptions, and some architectural choices (e.g. LLM provider routing) are stated as best-available hypotheses based on external research current as of August 2026 — they're meant to be validated against real usage during the pilot (Doc 3, Phase 5), not treated as final.
 
@@ -36,7 +38,7 @@ cp .env.example .env                   # fill in ANTHROPIC_API_KEY, VOYAGE_API_K
 docker compose up -d postgres redis    # Postgres+pgvector on :5433, Redis on :6380
 uv run alembic upgrade head              # create the application schema
 uv run python scripts/setup_checkpointer.py  # create the LangGraph checkpointer's own tables
-uv run python scripts/seed_business.py   # seed the demo business + example knowledge base
+uv run python scripts/seed_business.py   # seed the demo business, its dashboard login, and example knowledge base
 uv run pytest tests/                     # unit + integration tests (no external API calls)
 ```
 
@@ -52,9 +54,6 @@ Use `scripts/run_worker.py`, not the bare `rq worker inbound_messages` CLI — t
 Redis), and its default fork-based worker crashes immediately on Windows (`os.fork()` doesn't
 exist there). The script fixes both: it uses our own settings for the Redis connection and
 picks a non-forking worker class on Windows.
-
-```bash
-```
 
 To run the Jordanian Arabic/English evaluation set (`eval/conversations/`) against the real
 pipeline — costs real Anthropic + Voyage API calls, set `META_DRY_RUN=true` first so it
@@ -121,8 +120,8 @@ reply. No match still escalates, same as before this existed.
 Server-rendered (Jinja2, no separate frontend build) at `/dashboard` → pick a business → see
 escalations that need a reply, with the drafted reply pre-filled into an editable box. Sending
 reuses the exact same channel-dispatch code (`graph/nodes/send_reply.py`) a real auto-send would
-go through, then logs the outbound message and resumes the conversation to `auto`. **No auth** —
-this is an internal MVP tool, not safe to expose publicly as-is.
+go through, then logs the outbound message and resumes the conversation to `auto`. Gated by a
+real login (see "Dashboard authentication" below) — a business only ever sees its own data.
 
 ```bash
 uv run uvicorn reply_agent.api.app:app --reload
@@ -208,3 +207,42 @@ Business → Configurations** — create a *second* configuration (Page login ne
 Embedded Signup's), set its ID as `META_PAGE_SIGNUP_CONFIG_ID`.
 
 **Not yet live-tested**, same reasons and same caveat as WhatsApp's flow above.
+
+### Dashboard authentication
+
+Every dashboard, onboarding, and catalog/order-upload route requires a real login — a
+`User` row (`db/models.py`) with an email/password, one per business, checked by
+`auth/dependencies.py` on every request. This wasn't part of the original data model (Doc 2
+§5) — the dashboard itself didn't exist yet when that was written — and it wasn't built
+alongside the dashboard either; for a while every one of those routes was open to anyone with
+the URL. Closed once there was a real dashboard doing real things (viewing conversations,
+sending messages, uploading catalogs) to real per-business data, since an open door there is a
+different order of risk than an open door on a page that does nothing.
+
+- **Sign up**: `/signup` — creates a `Business` and its first `User` together, logs you in.
+- **Log in / out**: `/login`, `POST /logout`.
+- **Session**: Starlette's signed-cookie `SessionMiddleware` (`api/app.py`), not a server-side
+  session table or JWT — the cookie holds `{"user_id": ...}`, signed with `SESSION_SECRET_KEY`.
+  **Set a real random value for that key before any real deployment** — the default is
+  local-dev-only, and anyone holding it can forge a session for any user.
+- **Isolation**: a user has exactly one `business_id`; `require_business_access` (GET routes,
+  via `Depends`) and `ensure_business_access` (POST routes whose `business_id` arrives in a
+  JSON body, invisible to FastAPI's dependency injection) both 404 — not 403 — on any mismatch,
+  so a logged-in user can't even confirm some other `business_id` exists.
+- **No self-serve business listing**: `/dashboard` redirects straight to the logged-in user's
+  own business. There's no "all businesses" view anymore (there used to be, for whoever built
+  this) — a real multi-tenant product has no legitimate reason to show one user every business
+  on the platform.
+- **Passwords**: hashed with `bcrypt` directly (not `passlib` — unmaintained, with bcrypt
+  version-detection bugs against recent `bcrypt` releases).
+- **Existing demo data**: `scripts/seed_business.py` now also creates a login for the demo
+  business if one doesn't exist yet, and prints the credentials — needed because every
+  pre-existing business in the database had no `User` row the moment this shipped, which would
+  otherwise have locked out the one business already in use for testing.
+
+**Not built**: password reset, email verification, multiple staff accounts per business (the
+data model allows it — no uniqueness constraint on `User.business_id` — there's just no UI for
+inviting a second person yet), and a platform-admin view across all businesses (deliberately
+removed, not merely unbuilt — see "no self-serve business listing" above; if you need to
+operate across every business again, that's a distinct, separately-authorized role to design,
+not the same login a business owner gets).

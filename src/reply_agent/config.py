@@ -8,6 +8,11 @@ class Settings(BaseSettings):
 
     environment: str = "development"
 
+    # Signs the dashboard's session cookie (Starlette SessionMiddleware, api/app.py) — anyone
+    # who has this value can forge a valid session for any user_id. The default is fine for
+    # local dev only; set a real random value before any real deployment.
+    session_secret_key: str = "change-me-in-production"
+
     database_url: str = "postgresql+asyncpg://reply_agent:reply_agent@localhost:5433/reply_agent"
     database_url_sync: str = (
         "postgresql+psycopg://reply_agent:reply_agent@localhost:5433/reply_agent"

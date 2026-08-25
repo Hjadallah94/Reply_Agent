@@ -1,5 +1,6 @@
 """Owner dashboard (Doc 3 Phase 3). Real DB; the only thing mocked is the outbound channel
-send, same pattern as tests/unit/test_send_reply.py.
+send, same pattern as tests/unit/test_send_reply.py. Every route here is gated by
+auth/dependencies.py — tests log in via tests/auth_helpers.py the same way a browser would.
 """
 
 from io import BytesIO
@@ -21,23 +22,25 @@ from reply_agent.db.models import (
     EscalationStatus,
     Message,
     MessageDirection,
-    PlanTier,
 )
 from reply_agent.db.session import get_engine, get_sessionmaker
+from tests.auth_helpers import create_logged_in_business
 
 BUSINESS_NAME = "Dashboard Test Business"
 
 
 @pytest.fixture
-async def escalation():
+def client():
+    return TestClient(app)
+
+
+@pytest.fixture
+async def escalation(client):
+    business = await create_logged_in_business(client, BUSINESS_NAME)
+
     async with get_sessionmaker()() as session:
-        business = Business(
-            name=BUSINESS_NAME,
-            plan_tier=PlanTier.starter,
-            channels_connected={"whatsapp": {"phone_number_id": "test-phone-number-id"}},
-        )
-        session.add(business)
-        await session.flush()
+        db_business = await session.get(Business, business.id)
+        db_business.channels_connected = {"whatsapp": {"phone_number_id": "test-phone-number-id"}}
 
         customer = Customer(
             business_id=business.id,
@@ -75,39 +78,59 @@ async def escalation():
         await session.commit()
         await session.refresh(escalation)
 
-        yield business, escalation
+    # About to hand control to the test body, which makes its own TestClient calls — same
+    # cross-loop issue as create_logged_in_business's own dispose, needed again here since
+    # this fixture did more direct session work afterward.
+    await get_engine().dispose()
+    yield business, escalation
 
+    # The test body made its own TestClient calls after this session block closed — same
+    # cross-loop issue create_logged_in_business's own dispose handles, needed again here
+    # before this fixture's own teardown DB access.
+    await get_engine().dispose()
+    async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == business.id))
         await session.commit()
 
 
-async def test_business_list_shows_pending_count(escalation):
+async def test_dashboard_redirects_to_the_logged_in_user_own_business(client, escalation):
     business, _ = escalation
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+
+
+async def test_dashboard_redirects_to_login_when_not_authenticated():
     client = TestClient(app)
-    response = client.get("/dashboard")
-    assert response.status_code == 200
-    assert business.name in response.text
-    assert "1 pending" in response.text
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
 
 
-async def test_business_dashboard_lists_the_escalation(escalation):
+async def test_business_dashboard_lists_the_escalation(client, escalation):
     business, esc = escalation
-    client = TestClient(app)
     response = client.get(f"/businesses/{business.id}/dashboard")
     assert response.status_code == 200
     assert "962790001111" in response.text
     assert f"/dashboard/escalations/{esc.id}" in response.text
 
 
-async def test_business_dashboard_404s_for_unknown_business():
-    client = TestClient(app)
+async def test_business_dashboard_404s_for_unknown_business(client, escalation):
+    # Logged in, but to a different business than the one being requested.
     response = client.get("/businesses/00000000-0000-0000-0000-000000000000/dashboard")
     assert response.status_code == 404
 
 
-async def test_escalation_detail_shows_draft_and_reason(escalation):
+async def test_business_dashboard_redirects_to_login_when_not_authenticated(escalation):
+    business, _ = escalation
+    anonymous_client = TestClient(app)
+    response = anonymous_client.get(f"/businesses/{business.id}/dashboard", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+async def test_escalation_detail_shows_draft_and_reason(client, escalation):
     business, esc = escalation
-    client = TestClient(app)
     response = client.get(f"/businesses/{business.id}/dashboard/escalations/{esc.id}")
     assert response.status_code == 200
     assert "refund_or_complaint always escalates" in response.text
@@ -115,9 +138,8 @@ async def test_escalation_detail_shows_draft_and_reason(escalation):
     assert "Can I get a refund?" in response.text
 
 
-async def test_resolve_sends_updates_db_and_redirects(escalation):
+async def test_resolve_sends_updates_db_and_redirects(client, escalation):
     business, esc = escalation
-    client = TestClient(app)
 
     with patch(
         "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
@@ -155,7 +177,7 @@ async def test_resolve_sends_updates_db_and_redirects(escalation):
         assert outbound.model_used == "owner"
 
 
-async def test_resolve_already_resolved_returns_409(escalation):
+async def test_resolve_already_resolved_returns_409(client, escalation):
     business, esc = escalation
 
     # Set up the "already resolved" state directly via the ORM rather than a prior HTTP call —
@@ -168,7 +190,6 @@ async def test_resolve_already_resolved_returns_409(escalation):
         await session.commit()
     await get_engine().dispose()
 
-    client = TestClient(app)
     with patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()):
         response = client.post(
             f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
@@ -178,9 +199,8 @@ async def test_resolve_already_resolved_returns_409(escalation):
     assert response.status_code == 409
 
 
-async def test_resolve_rejects_blank_reply(escalation):
+async def test_resolve_rejects_blank_reply(client, escalation):
     business, esc = escalation
-    client = TestClient(app)
     response = client.post(
         f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
         data={"reply_text": "   "},
@@ -188,9 +208,8 @@ async def test_resolve_rejects_blank_reply(escalation):
     assert response.status_code == 400
 
 
-async def test_export_returns_xlsx_with_messages(escalation):
+async def test_export_returns_xlsx_with_messages(client, escalation):
     business, _esc = escalation
-    client = TestClient(app)
     response = client.get(f"/businesses/{business.id}/dashboard/export")
 
     assert response.status_code == 200
@@ -217,7 +236,6 @@ async def test_export_returns_xlsx_with_messages(escalation):
     assert rows[1][3] == "Can I get a refund?"
 
 
-async def test_export_404s_for_unknown_business():
-    client = TestClient(app)
+async def test_export_404s_for_unknown_business(client, escalation):
     response = client.get("/businesses/00000000-0000-0000-0000-000000000000/dashboard/export")
     assert response.status_code == 404

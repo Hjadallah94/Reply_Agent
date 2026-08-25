@@ -112,6 +112,9 @@ class Business(Base):
     orders: Mapped[list["Order"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
     )
+    users: Mapped[list["User"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan"
+    )
 
 
 class KnowledgeDocument(Base):
@@ -172,6 +175,29 @@ class Order(Base):
         UniqueConstraint("business_id", "order_reference", name="uq_order_reference"),
         Index("ix_orders_business_id_customer_phone", "business_id", "customer_phone"),
     )
+
+
+class User(Base):
+    """A business owner's own login (Doc 3: dashboard access needs auth before real sellers
+    use it — not in the original data model doc, added once the dashboard itself existed).
+    Multiple users per business are allowed (staff accounts) — nothing here assumes exactly one.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    business: Mapped["Business"] = relationship(back_populates="users")
+
+    __table_args__ = (Index("ix_users_business_id", "business_id"),)
 
 
 class Customer(Base):
