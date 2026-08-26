@@ -1,0 +1,99 @@
+services:
+  - type: web
+    name: reply-agent-web
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn reply_agent.api.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: META_GRAPH_API_VERSION
+        value: v21.0
+      - key: VOYAGE_EMBEDDING_MODEL
+        value: voyage-3.5
+      # Safe default: outbound sends only log until deliberately flipped for a live test,
+      # same reasoning as the local .env default.
+      - key: META_DRY_RUN
+        value: "true"
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_SYNC
+        sync: false
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: reply-agent-redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: META_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: META_EMBEDDED_SIGNUP_CONFIG_ID
+        sync: false
+      - key: META_PAGE_SIGNUP_CONFIG_ID
+        sync: false
+      - key: OWNER_NOTIFICATION_WHATSAPP_NUMBER
+        sync: false
+
+  - type: worker
+    name: reply-agent-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install .
+    startCommand: python scripts/run_worker.py
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: META_GRAPH_API_VERSION
+        value: v21.0
+      - key: VOYAGE_EMBEDDING_MODEL
+        value: voyage-3.5
+      - key: META_DRY_RUN
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: reply-agent-redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: META_PAGE_ACCESS_TOKEN
+        sync: false
+
+  - type: redis
+    name: reply-agent-redis
+    plan: free
+    ipAllowList: []
