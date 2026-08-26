@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Data deletion request — Reply Agent{% endblock %}
+{% block content %}
+<h1>Data deletion request received</h1>
+<p class="muted">Confirmation code: <strong>{{ confirmation_code }}</strong></p>
+<p>Your request has been logged and is being reviewed manually. If you connected a Facebook
+Page, Instagram account, or WhatsApp number to Reply Agent and want the data associated with
+that connection removed, contact us and reference the confirmation code above.</p>
+{% endblock %}

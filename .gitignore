@@ -34,3 +34,6 @@ Thumbs.db
 
 # Data
 *.log
+
+# App Review screencasts / local recordings — not source, not for version control
+Media/
