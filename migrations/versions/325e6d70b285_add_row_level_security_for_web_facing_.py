@@ -58,7 +58,18 @@ def upgrade() -> None:
         $$;
         """
     )
-    op.execute("GRANT CONNECT ON DATABASE reply_agent TO reply_agent_app")
+    # current_database() rather than a hardcoded name — the local dev DB is "reply_agent"
+    # (docker-compose.yml), but a managed host (Neon, RDS, ...) will use whatever name it
+    # assigns, so GRANT CONNECT ON DATABASE <literal name> isn't portable.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            EXECUTE format('GRANT CONNECT ON DATABASE %I TO reply_agent_app', current_database());
+        END
+        $$;
+        """
+    )
     op.execute("GRANT USAGE ON SCHEMA public TO reply_agent_app")
     op.execute(
         f"GRANT SELECT, INSERT, UPDATE, DELETE ON {', '.join(_ALL_RLS_TABLES)} TO reply_agent_app"
@@ -118,5 +129,13 @@ def downgrade() -> None:
 
     op.execute(f"REVOKE ALL ON {', '.join(_ALL_RLS_TABLES)} FROM reply_agent_app")
     op.execute("REVOKE USAGE ON SCHEMA public FROM reply_agent_app")
-    op.execute("REVOKE CONNECT ON DATABASE reply_agent FROM reply_agent_app")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            EXECUTE format('REVOKE CONNECT ON DATABASE %I FROM reply_agent_app', current_database());
+        END
+        $$;
+        """
+    )
     op.execute("DROP ROLE IF EXISTS reply_agent_app")
