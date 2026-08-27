@@ -3,7 +3,13 @@ services:
     name: reply-agent-web
     runtime: python
     plan: free
-    buildCommand: pip install .
+    # Editable, not a regular install: knowledge/loader.py's DATA_DIR resolves relative to its
+    # own __file__, walking up to the repo root — true when the package lives in the checkout
+    # (editable, same as local dev's `uv run`), not when pip copies it into site-packages at a
+    # different depth. That only matters for scripts/seed_business.py's demo data today (real
+    # businesses' knowledge comes from uploads, not these YAML files), but the fix needs to be
+    # portable, not a one-off.
+    buildCommand: pip install -e .
     startCommand: uvicorn reply_agent.api.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ENVIRONMENT
@@ -60,7 +66,13 @@ services:
     name: reply-agent-worker
     runtime: python
     plan: starter
-    buildCommand: pip install .
+    # Editable, not a regular install: knowledge/loader.py's DATA_DIR resolves relative to its
+    # own __file__, walking up to the repo root — true when the package lives in the checkout
+    # (editable, same as local dev's `uv run`), not when pip copies it into site-packages at a
+    # different depth. That only matters for scripts/seed_business.py's demo data today (real
+    # businesses' knowledge comes from uploads, not these YAML files), but the fix needs to be
+    # portable, not a one-off.
+    buildCommand: pip install -e .
     startCommand: python scripts/run_worker.py
     envVars:
       - key: ENVIRONMENT
