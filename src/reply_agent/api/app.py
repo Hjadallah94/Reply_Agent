@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from reply_agent.api.auth import router as auth_router
@@ -28,3 +29,10 @@ app.include_router(meta_compliance_router)
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/")
+async def root() -> RedirectResponse:
+    # /dashboard already does the right thing either way — a business's own dashboard if
+    # logged in, /login if not — so the bare domain root shouldn't be a bare 404.
+    return RedirectResponse(url="/dashboard", status_code=303)
