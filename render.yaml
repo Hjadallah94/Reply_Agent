@@ -85,6 +85,12 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
+      # memory/checkpointer.py's AsyncPostgresSaver needs this — a plain, non-Alembic-managed
+      # schema LangGraph owns itself. Missing here (only the web service had it) meant every
+      # job silently fell back to Settings' local-dev default (localhost:5433) and crashed on
+      # a Connection refused the moment run_graph() opened the checkpointer.
+      - key: DATABASE_URL_SYNC
+        sync: false
       - key: DATABASE_URL_APP
         sync: false
       - key: REDIS_URL
