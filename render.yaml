@@ -109,5 +109,7 @@ services:
 
   - type: redis
     name: reply-agent-redis-staging
-    plan: free
+    # Render allows only one free-tier Key Value instance per account, and production's
+    # reply-agent-redis already uses it — found live when the first sync attempt failed.
+    plan: starter
     ipAllowList: []
