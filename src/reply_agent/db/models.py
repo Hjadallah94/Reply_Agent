@@ -75,6 +75,12 @@ class EscalationStatus(enum.StrEnum):
     timed_out = "timed_out"
 
 
+class ApprovalRequestStatus(enum.StrEnum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class BillingStatus(enum.StrEnum):
     trialing = "trialing"
     active = "active"
@@ -282,6 +288,9 @@ class Conversation(Base):
     escalations: Mapped[list["Escalation"]] = relationship(
         back_populates="conversation", cascade="all, delete-orphan"
     )
+    approval_requests: Mapped[list["ApprovalRequest"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_conversations_business_id", "business_id"),)
 
@@ -338,6 +347,42 @@ class Escalation(Base):
     conversation: Mapped["Conversation"] = relationship(back_populates="escalations")
 
     __table_args__ = (Index("ix_escalations_conversation_id", "conversation_id"),)
+
+
+class ApprovalRequest(Base):
+    """Distinct from Escalation (Doc 2 Section 9.2): fires when the agent IS confident in a
+    computed delivery estimate, but a same-day commitment is consequential enough that it
+    still needs the owner's sign-off before reaching the customer — not a case of the agent
+    being unsure. See graph/nodes/request_owner_approval.py.
+    """
+
+    __tablename__ = "approval_requests"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    drafted_reply: Mapped[str] = mapped_column(Text, nullable=False)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    # Links back to the Order row estimate_delivery already wrote (uq_order_reference) — lets
+    # the reject route update it to reflect "tomorrow" instead of the declined same-day promise,
+    # without a second migration on the orders table.
+    order_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[ApprovalRequestStatus] = mapped_column(
+        Enum(ApprovalRequestStatus, name="approval_request_status"),
+        nullable=False,
+        default=ApprovalRequestStatus.pending,
+    )
+    resolved_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolution_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    conversation: Mapped["Conversation"] = relationship(back_populates="approval_requests")
+
+    __table_args__ = (Index("ix_approval_requests_conversation_id", "conversation_id"),)
 
 
 class Subscription(Base):

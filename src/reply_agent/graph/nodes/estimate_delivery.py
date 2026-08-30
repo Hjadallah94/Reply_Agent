@@ -114,11 +114,12 @@ async def estimate_delivery(state: GraphState) -> dict:
         estimated_minutes = transit_minutes + backlog_count * MINUTES_PER_ORDER_IN_QUEUE
         low_hours = max(1, estimated_minutes // 60)
         window_text = f"{low_hours}-{low_hours + 1} hours"
+        order_reference = f"chat-{uuid.uuid4().hex[:8]}"
 
         session.add(
             Order(
                 business_id=business_id,
-                order_reference=f"chat-{uuid.uuid4().hex[:8]}",
+                order_reference=order_reference,
                 customer_phone=customer.channel_handle if customer else "",
                 status="pending_delivery_estimate",
                 items_summary=f"{extraction.product_count} item(s)",
@@ -138,5 +139,6 @@ async def estimate_delivery(state: GraphState) -> dict:
                     f"transit time — better than the usual {min_lead_hours}h minimum since "
                     "it's not a busy day."
                 ),
+                "order_reference": order_reference,
             }
         }

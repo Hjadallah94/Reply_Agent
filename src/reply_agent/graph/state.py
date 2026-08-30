@@ -59,13 +59,27 @@ class EscalationRecord(TypedDict):
 
 class DeliveryEstimate(TypedDict):
     """graph/nodes/estimate_delivery.py's output (Doc 2 Section 9.1) — a live, computed
-    answer, not a retrieved one. No approval-related fields yet: that's Phase 6c, a later
-    increment, not this one.
+    answer, not a retrieved one. order_reference links to the Order row estimate_delivery
+    writes (Doc 2 Section 9.2) — carried through so request_owner_approval can store it on
+    the ApprovalRequest, letting a rejection update that specific Order later.
     """
 
     same_day_eligible: bool
     estimated_window: str
     reasoning: str
+    order_reference: NotRequired[str | None]
+
+
+class ApprovalRecord(TypedDict):
+    """graph/nodes/request_owner_approval.py's output (Doc 2 Section 9.2) — distinct from
+    EscalationRecord: this fires when the agent IS confident, not unsure, but a same-day
+    delivery commitment is consequential enough to need the owner's sign-off first.
+    """
+
+    reasoning: str
+    drafted_reply: str
+    order_reference: NotRequired[str | None]
+    notified_at: NotRequired[str | None]
 
 
 class GraphState(TypedDict):
@@ -82,8 +96,9 @@ class GraphState(TypedDict):
     retrieved_context: NotRequired[list[RetrievedChunk]]
     draft_reply: NotRequired[DraftReply]
     self_check: NotRequired[SelfCheckResult]
-    route: NotRequired[Literal["send", "escalate", "retry"]]
+    route: NotRequired[Literal["send", "escalate", "retry", "approve"]]
     escalation: NotRequired[EscalationRecord | None]
     delivery_estimate: NotRequired[DeliveryEstimate | None]
+    approval: NotRequired[ApprovalRecord | None]
 
     retrieval_attempts: NotRequired[int]

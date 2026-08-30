@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ customer_handle }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ customer_handle }} <span class="muted">({{ channel }})</span></h1>
+
+<div class="reason">{{ approval.reasoning }}</div>
+
+<div class="thread">
+  {% for m in messages %}
+  <div class="bubble {{ 'customer' if m.direction == 'inbound' else 'agent' }}">
+    {{ m.text }}
+    <span class="meta">{{ m.created_at }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 style="margin: 24px 0 10px;">Approve</h2>
+<form method="post" action="/businesses/{{ business.id }}/dashboard/approvals/{{ approval.id }}/approve">
+  <textarea name="reply_text" required>{{ approval.drafted_reply }}</textarea>
+  <button type="submit">Send reply</button>
+</form>
+
+<h2 style="margin: 24px 0 10px;">Reject</h2>
+<form method="post" action="/businesses/{{ business.id }}/dashboard/approvals/{{ approval.id }}/reject">
+  <textarea name="reply_text" required>{{ reject_default }}</textarea>
+  <button type="submit">Not approved — tell customer tomorrow</button>
+</form>
+{% endblock %}

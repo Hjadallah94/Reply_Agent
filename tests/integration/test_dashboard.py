@@ -13,6 +13,8 @@ from sqlalchemy import delete, select
 
 from reply_agent.api.app import app
 from reply_agent.db.models import (
+    ApprovalRequest,
+    ApprovalRequestStatus,
     Business,
     ChannelType,
     Conversation,
@@ -24,6 +26,7 @@ from reply_agent.db.models import (
     KnowledgeDocument,
     Message,
     MessageDirection,
+    Order,
 )
 from reply_agent.db.session import get_sessionmaker
 from tests.auth_helpers import create_logged_in_business, dispose_engines
@@ -89,6 +92,72 @@ async def escalation(client):
     # The test body made its own TestClient calls after this session block closed — same
     # cross-loop issue create_logged_in_business's own dispose handles, needed again here
     # before this fixture's own teardown DB access.
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        await session.execute(delete(Business).where(Business.id == business.id))
+        await session.commit()
+
+
+@pytest.fixture
+async def approval(client):
+    business = await create_logged_in_business(client, "Approval " + BUSINESS_NAME)
+
+    async with get_sessionmaker()() as session:
+        db_business = await session.get(Business, business.id)
+        db_business.channels_connected = {"whatsapp": {"phone_number_id": "test-phone-number-id"}}
+
+        customer = Customer(
+            business_id=business.id,
+            channel=ChannelType.whatsapp,
+            channel_handle="962790002222",
+        )
+        session.add(customer)
+        await session.flush()
+
+        conversation = Conversation(
+            business_id=business.id,
+            channel=ChannelType.whatsapp,
+            customer_id=customer.id,
+            status=ConversationStatus.owner_handled,
+            thread_id=f"whatsapp:{business.id}:962790002222",
+        )
+        session.add(conversation)
+        await session.flush()
+
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.inbound,
+                text="2 boxes of chocolate chip to Sweifieh please",
+            )
+        )
+
+        order = Order(
+            business_id=business.id,
+            order_reference="chat-test1234",
+            customer_phone="962790002222",
+            status="pending_delivery_estimate",
+            items_summary="2 item(s)",
+            delivery_address="Sweifieh, Amman",
+            delivery_window_promised="3-4 hours",
+            delivery_status="pending",
+        )
+        session.add(order)
+
+        approval = ApprovalRequest(
+            conversation_id=conversation.id,
+            drafted_reply="We can get that to you in 3-4 hours today.",
+            reasoning="0 order(s) already pending today, ~45 min transit time.",
+            order_reference="chat-test1234",
+            status=ApprovalRequestStatus.pending,
+        )
+        session.add(approval)
+        await session.commit()
+        await session.refresh(approval)
+
+    await dispose_engines()
+    yield business, approval
+
     await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == business.id))
@@ -312,3 +381,188 @@ async def test_export_returns_xlsx_with_messages(client, escalation):
 async def test_export_404s_for_unknown_business(client, escalation):
     response = client.get("/businesses/00000000-0000-0000-0000-000000000000/dashboard/export")
     assert response.status_code == 404
+
+
+async def test_business_dashboard_lists_the_approval(client, approval):
+    business, appr = approval
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert "962790002222" in response.text
+    assert f"/dashboard/approvals/{appr.id}" in response.text
+
+
+async def test_approval_detail_shows_draft_and_reasoning(client, approval):
+    business, appr = approval
+    response = client.get(f"/businesses/{business.id}/dashboard/approvals/{appr.id}")
+    assert response.status_code == 200
+    assert "0 order(s) already pending today" in response.text
+    assert "We can get that to you in 3-4 hours today." in response.text
+    assert "2 boxes of chocolate chip to Sweifieh please" in response.text
+
+
+async def test_approve_sends_updates_db_and_redirects(client, approval):
+    business, appr = approval
+
+    with (
+        patch(
+            "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
+        ) as mock_send,
+        patch(
+            "reply_agent.knowledge.corrections.embed_documents",
+            return_value=[[0.0] * 1024],
+        ),
+    ):
+        response = client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/approve",
+            data={"reply_text": "Edited: 3 hours today"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+    mock_send.assert_called_once_with(
+        to="962790002222", text="Edited: 3 hours today", phone_number_id="test-phone-number-id"
+    )
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(ApprovalRequest, appr.id)
+        assert refreshed.status == ApprovalRequestStatus.approved
+        assert refreshed.resolved_by == "owner"
+
+        conversation = await session.get(Conversation, appr.conversation_id)
+        assert conversation.status == ConversationStatus.auto
+
+        outbound = await session.scalar(
+            select(Message).where(
+                Message.conversation_id == appr.conversation_id,
+                Message.direction == MessageDirection.outbound,
+            )
+        )
+        assert outbound.text == "Edited: 3 hours today"
+        assert outbound.model_used == "owner"
+
+        # Approving doesn't touch the Order row — the same-day promise it already holds
+        # is exactly what got approved.
+        order = await session.scalar(select(Order).where(Order.order_reference == "chat-test1234"))
+        assert order.delivery_status == "pending"
+        assert order.delivery_window_promised == "3-4 hours"
+
+
+async def test_approve_with_an_edited_reply_records_a_correction(client, approval):
+    business, appr = approval
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch(
+            "reply_agent.knowledge.corrections.embed_documents",
+            return_value=[[0.0] * 1024],
+        ) as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/approve",
+            data={"reply_text": "Edited: 3 hours today"},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_called_once()
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        correction = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.brand_voice,
+            )
+        )
+        assert correction is not None
+        assert correction.structured_data["source"] == "owner_correction"
+        assert correction.structured_data["approval_id"] == str(appr.id)
+
+
+async def test_approve_unchanged_records_no_correction(client, approval):
+    business, appr = approval
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch("reply_agent.knowledge.corrections.embed_documents") as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/approve",
+            data={"reply_text": appr.drafted_reply},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_not_called()
+
+
+async def test_reject_sends_tomorrow_message_and_updates_order(client, approval):
+    business, appr = approval
+
+    with patch(
+        "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
+    ) as mock_send:
+        response = client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/reject",
+            data={"reply_text": "Sorry, not approved — delivery is tomorrow instead."},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    mock_send.assert_called_once_with(
+        to="962790002222",
+        text="Sorry, not approved — delivery is tomorrow instead.",
+        phone_number_id="test-phone-number-id",
+    )
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(ApprovalRequest, appr.id)
+        assert refreshed.status == ApprovalRequestStatus.rejected
+
+        conversation = await session.get(Conversation, appr.conversation_id)
+        assert conversation.status == ConversationStatus.auto
+
+        # The Order row estimate_delivery wrote must no longer show the declined same-day
+        # promise — this is the part that would otherwise be silently wrong.
+        order = await session.scalar(select(Order).where(Order.order_reference == "chat-test1234"))
+        assert order.delivery_status == "declined"
+        assert order.delivery_window_promised == "tomorrow"
+
+        correction = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.brand_voice,
+            )
+        )
+        assert correction is None
+
+
+async def test_approval_already_resolved_returns_409(client, approval):
+    business, appr = approval
+
+    async with get_sessionmaker()() as session:
+        db_approval = await session.get(ApprovalRequest, appr.id)
+        db_approval.status = ApprovalRequestStatus.approved
+        await session.commit()
+    await dispose_engines()
+
+    with patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()):
+        response = client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/approve",
+            data={"reply_text": "Second attempt"},
+        )
+
+    assert response.status_code == 409
+
+
+async def test_approval_rejects_blank_reply(client, approval):
+    business, appr = approval
+    response = client.post(
+        f"/businesses/{business.id}/dashboard/approvals/{appr.id}/reject",
+        data={"reply_text": "   "},
+    )
+    assert response.status_code == 400

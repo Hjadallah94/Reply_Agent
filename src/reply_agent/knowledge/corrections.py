@@ -29,10 +29,18 @@ async def record_owner_correction(
     business_id: uuid.UUID,
     customer_message: str,
     corrected_reply: str,
-    escalation_id: uuid.UUID,
+    escalation_id: uuid.UUID | None = None,
+    approval_id: uuid.UUID | None = None,
 ) -> None:
     content = f"Customer: {customer_message}\nSeller: {corrected_reply}"
     vector = embed_documents([content])[0]
+    # Same mechanism, two possible triggers (api/dashboard.py's resolve_escalation and
+    # approve_approval) — exactly one of these is set depending on which route called this.
+    structured_data = {"source": "owner_correction"}
+    if escalation_id is not None:
+        structured_data["escalation_id"] = str(escalation_id)
+    if approval_id is not None:
+        structured_data["approval_id"] = str(approval_id)
     session.add(
         KnowledgeDocument(
             business_id=business_id,
@@ -42,7 +50,7 @@ async def record_owner_correction(
             # unfiltered, ordered LIMIT, not a search — but cheap to keep for the first time
             # someone needs to tell a real correction apart from a hand-authored sample (a
             # future "review what your agent has learned" UI, or debugging a bad reply).
-            structured_data={"source": "owner_correction", "escalation_id": str(escalation_id)},
+            structured_data=structured_data,
             embedding_vector=vector,
         )
     )

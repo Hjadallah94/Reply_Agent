@@ -5,6 +5,7 @@ ingest_message -> load_context -> classify_intent -> estimate_delivery -> retrie
         --send----> send_reply -> update_memory -> END
         --retry---> (loop back to retrieve_knowledge)
         --escalate-> escalate_to_owner -> update_memory -> END
+        --approve-> request_owner_approval -> update_memory -> END
 
 Every message is drafted before the confidence router decides send vs. escalate — the risk
 gate (Doc 2 Section 2.4) never skips retrieve_knowledge/generate_response, it only prevents
@@ -14,6 +15,10 @@ estimate_delivery (Doc 2 Section 9.1) runs unconditionally in this topology, sam
 other node — it internally no-ops for every intent except place_order, rather than being a
 second conditional-edges branch, so the graph keeps a single linear shape with one fan-out
 point (self_check).
+
+request_owner_approval (Doc 2 Section 9.2) is a fourth branch off that same fan-out point,
+alongside send/retry/escalate — a same-day delivery commitment that IS well-grounded (unlike
+escalation) but still needs the owner's sign-off before it reaches the customer.
 """
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -25,6 +30,7 @@ from reply_agent.graph.nodes.estimate_delivery import estimate_delivery
 from reply_agent.graph.nodes.generate_response import generate_response
 from reply_agent.graph.nodes.ingest_message import ingest_message
 from reply_agent.graph.nodes.load_context import load_context
+from reply_agent.graph.nodes.request_owner_approval import request_owner_approval
 from reply_agent.graph.nodes.retrieve_knowledge import retrieve_knowledge
 from reply_agent.graph.nodes.self_check import self_check
 from reply_agent.graph.nodes.send_reply import send_reply
@@ -46,6 +52,7 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_node("self_check", self_check)
     builder.add_node("send_reply", send_reply)
     builder.add_node("escalate_to_owner", escalate_to_owner)
+    builder.add_node("request_owner_approval", request_owner_approval)
     builder.add_node("update_memory", update_memory)
 
     builder.add_edge(START, "ingest_message")
@@ -59,11 +66,17 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_conditional_edges(
         "self_check",
         confidence_router,
-        {"send": "send_reply", "retry": "retrieve_knowledge", "escalate": "escalate_to_owner"},
+        {
+            "send": "send_reply",
+            "retry": "retrieve_knowledge",
+            "escalate": "escalate_to_owner",
+            "approve": "request_owner_approval",
+        },
     )
 
     builder.add_edge("send_reply", "update_memory")
     builder.add_edge("escalate_to_owner", "update_memory")
+    builder.add_edge("request_owner_approval", "update_memory")
     builder.add_edge("update_memory", END)
 
     return builder.compile(checkpointer=checkpointer)

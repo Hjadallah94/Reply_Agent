@@ -1,4 +1,9 @@
-from reply_agent.graph.routers import MAX_RETRIEVAL_ATTEMPTS, blocks_auto_send, confidence_router
+from reply_agent.graph.routers import (
+    MAX_RETRIEVAL_ATTEMPTS,
+    blocks_auto_send,
+    confidence_router,
+    needs_owner_approval,
+)
 
 
 def make_intent(label="other", confidence=0.9, sentiment="neutral"):
@@ -111,3 +116,63 @@ def test_blocks_auto_send_false_for_order_status_with_order_context():
         ],
     }
     assert blocks_auto_send(state) is False
+
+
+def test_needs_owner_approval_true_for_same_day_eligible_place_order():
+    state = {
+        "intent": make_intent(label="place_order"),
+        "delivery_estimate": {
+            "same_day_eligible": True,
+            "estimated_window": "3-4 hours",
+            "reasoning": "quiet day",
+        },
+    }
+    assert needs_owner_approval(state) is True
+
+
+def test_needs_owner_approval_false_for_next_day_deferral():
+    """A decline (same_day_eligible: False) auto-sends unchanged — it's not a commitment."""
+    state = {
+        "intent": make_intent(label="place_order"),
+        "delivery_estimate": {
+            "same_day_eligible": False,
+            "estimated_window": "tomorrow",
+            "reasoning": "past cutoff",
+        },
+    }
+    assert needs_owner_approval(state) is False
+
+
+def test_needs_owner_approval_false_when_delivery_estimate_missing():
+    """A capability-gap place_order (no address/Maps failure) has delivery_estimate: None —
+    that already routes to escalate via blocks_auto_send, not approve."""
+    state = {"intent": make_intent(label="place_order"), "delivery_estimate": None}
+    assert needs_owner_approval(state) is False
+
+
+def test_confidence_router_routes_same_day_eligible_order_to_approve():
+    state = {
+        "intent": make_intent(label="place_order"),
+        "self_check": {"passed": True, "reason": "grounded", "needs_retry": False},
+        "retrieval_attempts": 0,
+        "delivery_estimate": {
+            "same_day_eligible": True,
+            "estimated_window": "3-4 hours",
+            "reasoning": "quiet day",
+        },
+    }
+    assert confidence_router(state) == "approve"
+
+
+def test_confidence_router_sends_next_day_deferral_unchanged():
+    state = {
+        "intent": make_intent(label="place_order"),
+        "self_check": {"passed": True, "reason": "grounded", "needs_retry": False},
+        "retrieval_attempts": 0,
+        "delivery_estimate": {
+            "same_day_eligible": False,
+            "estimated_window": "tomorrow",
+            "reasoning": "past cutoff",
+        },
+    }
+    assert confidence_router(state) == "send"

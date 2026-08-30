@@ -21,6 +21,8 @@ from sqlalchemy.orm import selectinload
 from reply_agent.auth.dependencies import get_current_user, require_business_access
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.db.models import (
+    ApprovalRequest,
+    ApprovalRequestStatus,
     Business,
     Conversation,
     ConversationStatus,
@@ -29,6 +31,7 @@ from reply_agent.db.models import (
     EscalationStatus,
     Message,
     MessageDirection,
+    Order,
 )
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.send_reply import send_reply
@@ -76,6 +79,31 @@ async def business_dashboard(
             for e in pending
         ]
 
+        pending_approval_records = (
+            await session.scalars(
+                select(ApprovalRequest)
+                .join(Conversation)
+                .where(
+                    Conversation.business_id == business.id,
+                    ApprovalRequest.status == ApprovalRequestStatus.pending,
+                )
+                .options(
+                    selectinload(ApprovalRequest.conversation).selectinload(Conversation.customer)
+                )
+                .order_by(ApprovalRequest.created_at)
+            )
+        ).all()
+
+        pending_approval_rows = [
+            {
+                "id": a.id,
+                "customer_handle": a.conversation.customer.channel_handle,
+                "channel": a.conversation.channel.value,
+                "reasoning": a.reasoning,
+            }
+            for a in pending_approval_records
+        ]
+
         conversations = (
             await session.scalars(
                 select(Conversation)
@@ -102,6 +130,7 @@ async def business_dashboard(
             "business": business,
             "usage": usage,
             "pending_escalations": pending_rows,
+            "pending_approvals": pending_approval_rows,
             "conversations": conversation_rows,
         },
     )
@@ -277,6 +306,187 @@ async def resolve_escalation(
         escalation.resolved_by = "owner"
         escalation.resolution_text = reply_text
         escalation.resolution_time = datetime.now(UTC)
+        conversation.status = ConversationStatus.auto
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/approvals/{approval_id}")
+async def approval_detail(
+    request: Request,
+    approval_id: uuid.UUID,
+    business: Business = Depends(require_business_access),
+):
+    async with tenant_session(business.id) as session:
+        approval = await session.scalar(
+            select(ApprovalRequest)
+            .where(ApprovalRequest.id == approval_id)
+            .options(
+                selectinload(ApprovalRequest.conversation).selectinload(Conversation.customer),
+                selectinload(ApprovalRequest.conversation).selectinload(Conversation.messages),
+            )
+        )
+        if approval is None or approval.conversation.business_id != business.id:
+            raise HTTPException(status_code=404, detail="Approval request not found")
+
+        conversation = approval.conversation
+        messages = [
+            {
+                "direction": m.direction.value,
+                "text": m.text,
+                "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
+            }
+            for m in conversation.messages
+        ]
+
+    return templates.TemplateResponse(
+        request,
+        "approval.html",
+        {
+            "business": business,
+            "approval": approval,
+            "customer_handle": conversation.customer.channel_handle,
+            "channel": conversation.channel.value,
+            "messages": messages,
+            "reject_default": (
+                "Sorry, that delivery time isn't approved — we can get it to you tomorrow instead."
+            ),
+        },
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/approvals/{approval_id}/approve")
+async def approve_approval(
+    approval_id: uuid.UUID,
+    reply_text: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    reply_text = reply_text.strip()
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Reply text is required")
+
+    async with tenant_session(business.id) as session:
+        approval = await session.scalar(
+            select(ApprovalRequest)
+            .where(ApprovalRequest.id == approval_id)
+            .options(selectinload(ApprovalRequest.conversation))
+        )
+        if approval is None or approval.conversation.business_id != business.id:
+            raise HTTPException(status_code=404, detail="Approval request not found")
+        if approval.status != ApprovalRequestStatus.pending:
+            raise HTTPException(status_code=409, detail="Approval request already resolved")
+
+        conversation = approval.conversation
+
+        await send_reply(
+            {
+                "channel": conversation.channel.value,
+                "business_id": str(conversation.business_id),
+                "thread_id": conversation.thread_id,
+                "draft_reply": {"text": reply_text},
+            }
+        )
+
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.outbound,
+                text=reply_text,
+                model_used="owner",
+            )
+        )
+
+        # Same owner-correction gate as resolve_escalation — approving a draft unchanged isn't
+        # a correction, editing it before sending is.
+        if reply_text != (approval.drafted_reply or ""):
+            customer_message = await session.scalar(
+                select(Message)
+                .where(
+                    Message.conversation_id == conversation.id,
+                    Message.direction == MessageDirection.inbound,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            if customer_message is not None:
+                await record_owner_correction(
+                    session,
+                    business_id=business.id,
+                    customer_message=customer_message.text,
+                    corrected_reply=reply_text,
+                    approval_id=approval.id,
+                )
+
+        approval.status = ApprovalRequestStatus.approved
+        approval.resolved_by = "owner"
+        approval.resolution_time = datetime.now(UTC)
+        conversation.status = ConversationStatus.auto
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/approvals/{approval_id}/reject")
+async def reject_approval(
+    approval_id: uuid.UUID,
+    reply_text: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    reply_text = reply_text.strip()
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Reply text is required")
+
+    async with tenant_session(business.id) as session:
+        approval = await session.scalar(
+            select(ApprovalRequest)
+            .where(ApprovalRequest.id == approval_id)
+            .options(selectinload(ApprovalRequest.conversation))
+        )
+        if approval is None or approval.conversation.business_id != business.id:
+            raise HTTPException(status_code=404, detail="Approval request not found")
+        if approval.status != ApprovalRequestStatus.pending:
+            raise HTTPException(status_code=409, detail="Approval request already resolved")
+
+        conversation = approval.conversation
+
+        await send_reply(
+            {
+                "channel": conversation.channel.value,
+                "business_id": str(conversation.business_id),
+                "thread_id": conversation.thread_id,
+                "draft_reply": {"text": reply_text},
+            }
+        )
+
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.outbound,
+                text=reply_text,
+                model_used="owner",
+            )
+        )
+
+        # Declining a same-day commitment isn't a phrasing correction (see plan's Design
+        # decisions) — no record_owner_correction call here, unlike the approve route.
+
+        # The Order row estimate_delivery already wrote is still showing the declined same-day
+        # promise — update it so it reflects what the customer was actually told, and so it
+        # drops out of estimate_delivery's backlog COUNT (which filters on delivery_status ==
+        # "pending") for the rest of today.
+        if approval.order_reference:
+            order = await session.scalar(
+                select(Order).where(
+                    Order.business_id == business.id,
+                    Order.order_reference == approval.order_reference,
+                )
+            )
+            if order is not None:
+                order.delivery_status = "declined"
+                order.delivery_window_promised = "tomorrow"
+
+        approval.status = ApprovalRequestStatus.rejected
+        approval.resolved_by = "owner"
+        approval.resolution_time = datetime.now(UTC)
         conversation.status = ConversationStatus.auto
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)

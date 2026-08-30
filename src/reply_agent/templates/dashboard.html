@@ -47,6 +47,23 @@
   <p class="empty">Nothing waiting on you right now.</p>
 {% endif %}
 
+<h2 style="margin: 28px 0 10px;">Needs your approval</h2>
+{% if pending_approvals %}
+  {% for a in pending_approvals %}
+  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/approvals/{{ a.id }}">
+    <div class="card">
+      <div class="row">
+        <strong>{{ a.customer_handle }}</strong>
+        <span class="badge pending">{{ a.channel }}</span>
+      </div>
+      <p class="muted" style="margin: 6px 0 0;">{{ a.reasoning }}</p>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">No same-day commitments waiting on you right now.</p>
+{% endif %}
+
 <div class="row" style="align-items: baseline;">
   <h2 style="margin: 28px 0 10px;">Recent conversations</h2>
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/export">Download as Excel</a>
