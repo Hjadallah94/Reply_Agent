@@ -57,6 +57,17 @@ class EscalationRecord(TypedDict):
     resolved_by: NotRequired[str | None]
 
 
+class DeliveryEstimate(TypedDict):
+    """graph/nodes/estimate_delivery.py's output (Doc 2 Section 9.1) — a live, computed
+    answer, not a retrieved one. No approval-related fields yet: that's Phase 6c, a later
+    increment, not this one.
+    """
+
+    same_day_eligible: bool
+    estimated_window: str
+    reasoning: str
+
+
 class GraphState(TypedDict):
     business_id: str
     channel: Literal["whatsapp", "instagram", "messenger"]
@@ -73,5 +84,6 @@ class GraphState(TypedDict):
     self_check: NotRequired[SelfCheckResult]
     route: NotRequired[Literal["send", "escalate", "retry"]]
     escalation: NotRequired[EscalationRecord | None]
+    delivery_estimate: NotRequired[DeliveryEstimate | None]
 
     retrieval_attempts: NotRequired[int]

@@ -7,6 +7,7 @@ from reply_agent.llm.client import MODEL_HAIKU, get_anthropic_client
 
 IntentLabel = Literal[
     "product_availability_price",
+    "place_order",
     "order_status",
     "policy_question",
     "price_negotiation",
@@ -31,7 +32,10 @@ sentiment: the customer's emotional tone in their latest message.
 
 Category guide:
 - product_availability_price: asking if something is in stock, what size/color is available, or
-  its price.
+  its price — not yet confirming they want to buy it.
+- place_order: confirming or requesting to buy specific item(s) now (e.g. "I'll take 2 of the
+  chocolate chip cookies", "بدي اطلب"), including when they also give or ask about a delivery
+  address/time. Distinct from product_availability_price, which is just asking questions.
 - order_status: asking about an order they already placed.
 - policy_question: delivery time, payment methods, returns/exchanges.
 - price_negotiation: asking for a discount, "best price", or negotiating.

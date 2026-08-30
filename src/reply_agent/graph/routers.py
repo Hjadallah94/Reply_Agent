@@ -18,7 +18,15 @@ MAX_RETRIEVAL_ATTEMPTS = 2
 
 def blocks_auto_send(state: GraphState) -> bool:
     order_found = order_context_found(state.get("retrieved_context", []))
-    return blocking_reason(state["intent"], order_found=order_found) is not None
+    delivery_estimate_found = state.get("delivery_estimate") is not None
+    return (
+        blocking_reason(
+            state["intent"],
+            order_found=order_found,
+            delivery_estimate_found=delivery_estimate_found,
+        )
+        is not None
+    )
 
 
 def confidence_router(state: GraphState) -> Literal["send", "retry", "escalate"]:

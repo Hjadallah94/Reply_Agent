@@ -1,0 +1,25 @@
+- topic: delivery
+  content: >
+    Orders placed before 3:00pm are usually deliverable the same day, given at least 6 hours'
+    notice — how fast exactly depends on how many orders we already have and how far the
+    delivery is, we'll always check and tell you a real estimate before confirming. Orders
+    placed after 3:00pm go out the next day.
+
+- topic: payment
+  content: >
+    Cash on Delivery (COD) is available everywhere we deliver. CliQ transfer is also accepted.
+
+- topic: returns
+  content: >
+    Since these are baked-to-order fresh cookies, we can't accept returns or exchanges once
+    delivered — please double check your order (flavors, box sizes) before confirming.
+
+- topic: allergens
+  content: >
+    All cookies are baked in a kitchen that also handles nuts, dairy, gluten, and eggs — we
+    can't guarantee any item is fully free of these, even the sugar-free option.
+
+- topic: hours
+  content: >
+    We take orders daily from 9am to 9pm Amman time. Messages after 9pm are answered the next
+    morning.

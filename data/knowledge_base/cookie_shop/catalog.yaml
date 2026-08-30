@@ -1,0 +1,89 @@
+# Demo catalog for a home-based cookie business in Amman, built for the delivery-estimation
+# expansion (Doc 1 §9 / Doc 2 §9) — a second demo persona alongside example_business (abayas).
+- name: "Classic Chocolate Chip"
+  description: "Soft-baked chocolate chip cookies, our best-seller."
+  price_jod: 6
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+    - label: "box of 12"
+      stock_status: in_stock
+
+- name: "Double Chocolate Fudge"
+  description: "Rich cocoa dough loaded with dark chocolate chunks."
+  price_jod: 7
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+    - label: "box of 12"
+      stock_status: in_stock
+
+- name: "Oatmeal Raisin"
+  description: "Classic oatmeal cookies with raisins and a hint of cinnamon."
+  price_jod: 6
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+    - label: "box of 12"
+      stock_status: out_of_stock
+
+- name: "Red Velvet Cream Cheese"
+  description: "Red velvet cookies with a cream cheese filling."
+  price_jod: 8
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+
+- name: "Lotus Biscoff Stuffed"
+  description: "Cookie dough stuffed with Lotus Biscoff spread, topped with a Biscoff crumb."
+  price_jod: 9
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+    - label: "box of 12"
+      stock_status: in_stock
+
+- name: "Nutella Stuffed"
+  description: "Molten Nutella center, baked to order for maximum gooeyness."
+  price_jod: 9
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+
+- name: "Pistachio"
+  description: "Pistachio dough with real crushed pistachios, no artificial coloring."
+  price_jod: 8
+  stock_status: out_of_stock
+  variants: []
+
+- name: "White Chocolate Macadamia"
+  description: "White chocolate chips and roasted macadamia nuts."
+  price_jod: 8
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+    - label: "box of 12"
+      stock_status: in_stock
+
+- name: "Date-Filled Ma'amoul Cookie"
+  description: "A cookie take on ma'amoul — buttery dough filled with date paste."
+  price_jod: 7
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock
+
+- name: "Sugar-Free Oat Cookie"
+  description: "No added sugar, sweetened naturally with dates — for lower-sugar diets."
+  price_jod: 7
+  stock_status: in_stock
+  variants:
+    - label: "box of 6"
+      stock_status: in_stock

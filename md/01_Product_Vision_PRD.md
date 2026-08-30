@@ -129,6 +129,23 @@ Nobody in the research set is a self-serve, transparently-priced, Levantine-Arab
 | Low message-volume sellers may not see enough value to pay monthly. | Starter tier priced low enough (Doc 5) to be a low-risk yes; free trial lets sellers feel the time saved before paying. |
 | Willingness-to-pay in JOD is unproven versus the AED benchmarks in the research. | Run a paid pilot with 15–25 real sellers before committing to a final price; treat Doc 5's numbers as a starting hypothesis, not a fixed price. |
 
+## 9. V2 — Operational Automation (Post-Launch Expansion)
+
+This section describes the next major capability beyond V1's reply agent, sketched during early customer conversations for a second demo vertical (a home-based cookie business). It is explicitly out of scope for the V1 launch (Section 4) — the reply agent has to work and ship first — but shapes the direction the product grows into once V1 is proven.
+
+**The gap it closes:** V1 answers questions from a static knowledge base. It cannot yet make a real-time operational judgment call — like whether a delivery can genuinely be fulfilled today given current order volume, traffic, and distance — nor can it hand a *specific, consequential decision* to the owner for a one-tap yes/no the way it already hands over an *uncertain* one (Section 3.1, Design principle 2).
+
+**What it adds:**
+
+- **Live delivery-logistics reasoning.** The agent evaluates a delivery request against the business's own cutoff/lead-time rules, its current order backlog, and a real transit-time estimate (Google Maps) between the shop and the customer — not just a static "delivery takes 1-2 days" FAQ answer.
+- **Approval-in-the-loop for consequential commitments.** Distinct from escalation, which fires when the agent is *unsure*: this fires when the agent *is* confident, but the commitment — a specific delivery promise — still needs the owner's sign-off before it reaches the customer. Target: the agent handles the large majority of these itself over time, with the owner approving only the minority that warrant it.
+- **Adaptive autonomy.** Early on, most delivery commitments route to the owner for approval. As the system accumulates real approval/rejection history, the auto-approve threshold widens for that specific business — the owner does less each week not because the product launched with fewer checks, but because it earned the trust incrementally.
+- **Owner-editable operational rules.** Delivery cutoff time, minimum lead time, and similar policies become something the owner can actually change themselves, not something baked in at setup.
+- **Product/catalog management and promotions**, managed directly rather than via a re-uploaded spreadsheet each time.
+- **A more capable owner-facing experience.** The current lightweight dashboard was built to be functional for Meta App Review and early piloting; this phase invests in a genuinely polished, bilingual (Arabic/English) interface the owner actually wants to use day-to-day — plus real push notifications for approval requests, an evolution of the WhatsApp-based owner notification already used in V1.
+
+See Doc 2, Section 9 for the technical shape of this, and Doc 3, Phase 6 for how it's sequenced.
+
 ---
 
 *Next document: 02 — System Architecture (LangGraph nodes, RAG and memory layers, data model, tech stack).*

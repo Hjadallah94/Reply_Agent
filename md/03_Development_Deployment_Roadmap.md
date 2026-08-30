@@ -57,6 +57,19 @@ Six phases, sequenced so every phase produces something usable — no "big bang"
 > **Total estimated timeline**
 > Roughly 14–20 weeks from a standing start to public launch, dominated less by engineering effort than by Meta's app review and business verification lead times (Section 2) — start those immediately and build in parallel.
 
+### Phase 6 — V2: Operational Automation (post-launch expansion, timeline TBD pending Phase 5 pilot learnings)
+
+Not part of the original six-phase plan — added after early customer conversations validated demand for real operational reasoning (delivery logistics), not just informational Q&A (Doc 1, Section 9; Doc 2, Section 9). Sequenced to prove the riskiest, cheapest-to-validate piece first, before investing in the bigger, more open-ended UI redesign.
+
+1. **Foundation** — extend the Order/Business schema (Doc 2, Section 9.3), integrate the Google Maps Distance Matrix API, get real current pricing for it into Doc 5.
+2. **Delivery-estimation reasoning** — build the `estimate_delivery` node, prove it against two real test scenarios (an after-cutoff order correctly deferred to next-day; a same-day order with a real 3-4 hour transit estimate) live, against real data, the same way every other feature in this project has been proven, not just unit tests.
+3. **Approval workflow** — reuse the existing WhatsApp owner-notification channel first (cheapest, already built, no new infrastructure) rather than jumping straight to a native/PWA app. Prove the approve/reject mechanic works end-to-end before investing in a nicer notification surface.
+4. **Adaptive autonomy** — start logging every approval outcome from day one of Phase 6.3, even before any auto-approval logic exists, so there's real historical data to build the heuristic in Doc 2, Section 9.4 against once there's enough of it.
+5. **Product/catalog management + promotions** — dashboard CRUD for products and time-bound promotional content, replacing the spreadsheet-upload-only flow.
+6. **UI modernization + bilingual redesign** — the biggest, most open-ended piece of this phase: a genuinely polished, Arabic/English (RTL-aware) owner-facing interface, including real push notifications (Doc 2, Section 9.6). Scoped as its own initiative so it doesn't gate the operational-reasoning capability above, which delivers real value on the existing dashboard first.
+
+This phase is explicitly sequenced after Phase 5's pilot, not before — real pilot feedback should inform which of these pieces actually matter most to real sellers before committing further build time.
+
 ## 2. Meta App Review & Business Verification
 
 This is the step most likely to be the critical path, so it's called out separately. Requirements evolve, so re-verify against Meta's current developer documentation before Phase 0, but the shape of the process is stable:

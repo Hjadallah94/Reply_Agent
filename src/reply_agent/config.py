@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     voyage_api_key: str = ""
     voyage_embedding_model: str = "voyage-3.5"
 
+    # Routes API (integrations/google_maps.py, Doc 2 Section 9.5) — real per-call cost, unlike
+    # every Meta API used elsewhere in this project.
+    google_maps_api_key: str = ""
+
     meta_app_id: str = ""
     meta_app_secret: str = ""
     # Our own Tech Provider System User token (Business Settings > System Users), shared across

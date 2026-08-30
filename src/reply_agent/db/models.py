@@ -93,6 +93,12 @@ class Business(Base):
     )
     brand_voice_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     escalation_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # The shop's own origin location — Doc 2 Section 9.1's estimate_delivery node needs this
+    # as the Google Maps origin. Nullable: only businesses using delivery-estimation need it.
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Shape: {"cutoff_hour": 15, "min_lead_hours": 6} (Doc 2 Section 9.3). Owner-editable UI
+    # is Phase 6e+; for now this is seeded directly per business, same as escalation_rules.
+    delivery_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -168,6 +174,14 @@ class Order(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     items_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The three fields below are only populated for orders placed live through a conversation
+    # (graph/nodes/estimate_delivery.py, Doc 2 Section 9.1) — spreadsheet-synced orders never
+    # set them. delivery_status is deliberately a separate column from the free-text `status`
+    # above: the backlog COUNT query (Doc 2 Section 9.3) needs one unambiguous value to filter
+    # on, not every seller's own status vocabulary.
+    delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_window_promised: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

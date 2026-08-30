@@ -202,6 +202,50 @@ A customer messages a fashion seller on Instagram: "3ndkom ha l fustan be size M
 
 Total elapsed time: a few seconds, no owner involvement. Compare to a customer asking for a 30% discount "just this once" — that hits the risk gate on price negotiation and routes straight to `escalate_to_owner` with a drafted, policy-compliant counter-offer for the owner to approve or edit.
 
+## 9. V2 Expansion: Operational Reasoning & Approval Workflow
+
+*(Product context: Doc 1, Section 9. This section describes the technical shape of that expansion — additive to the architecture above, not a replacement for it.)*
+
+### 9.1 A new kind of node: live operational tools, not just retrieval
+
+Everything in Section 3's graph either retrieves static knowledge or generates/checks text. This expansion adds a genuine tool-calling capability: a node that calls out to live systems mid-conversation and reasons over the result, rather than only retrieving pre-embedded content.
+
+New node, `estimate_delivery`, inserted between `retrieve_knowledge` and `generate_response` when `classify_intent` labels the message as a delivery/order request:
+
+1. Reads the business's delivery rules (cutoff time, minimum lead time — Section 9.3) and the current order backlog (count of orders already committed for today's delivery window).
+2. Calls the Google Maps Distance Matrix API with the shop's address and the customer's delivery address, factoring in current traffic conditions, to estimate transit time.
+3. Combines both into either a same-day estimate (with a time window) or a "next-day, past cutoff" response — and flags whether this specific estimate needs owner approval (Section 9.2) before being sent.
+
+### 9.2 Approval-in-the-loop, distinct from escalation
+
+Escalation (Section 2.5, 3.2) fires when the agent isn't confident enough to answer at all. This is different: the agent *is* confident in its delivery estimate, but the commitment itself — promising a customer a specific delivery window — is consequential enough that it still routes through the owner before being sent, at least initially.
+
+- A new `approval_request` record (parallel to `escalations` in Section 5) carries the drafted commitment, the reasoning behind it (backlog count, estimated transit time, which rule applied), and routes to the owner the same way an escalation does today.
+- If approved, `send_reply` dispatches as normal. If rejected, the agent tells the customer the request wasn't approved and defaults to the next-day fallback.
+- Target design point: roughly 80% of these handled without owner input once the system has learned the business's patterns (Section 9.4) — starting closer to 100% requiring approval on day one, deliberately conservative until there's real signal to earn otherwise.
+
+### 9.3 New data model additions
+
+| Table / field | Addition | Notes |
+|---|---|---|
+| businesses.delivery_rules | New JSONB field (same pattern as escalation_rules) | Cutoff time, minimum lead-time hours, capacity thresholds — owner-editable eventually, seeded at onboarding for now. |
+| orders | Extended with delivery_window_requested, delivery_window_promised, delivery_status | Needed to compute "how many orders are already committed for today" — the backlog input to Section 9.1. |
+| approval_requests | New table: id, conversation_id, drafted_commitment, reasoning, status (pending/approved/rejected), resolved_by, resolved_at | Parallel structure to escalations; also the training signal for Section 9.4. |
+
+### 9.4 Adaptive autonomy — a real heuristic, not a black box
+
+The "system learns the owner's preferences" behavior should start as an explainable, rule-based heuristic on top of the approval_requests history — not an opaque model retrained on decisions — so the owner can always understand *why* the agent started auto-approving a given pattern. A reasonable starting point: once N consecutive similar approval requests (same rule triggered, similar backlog/transit-time range) have been approved unchanged, future requests matching that pattern skip the approval step. This can get more sophisticated over time, but the explainability requirement doesn't change — it's the same trust principle already governing every other part of the product (Doc 1, Section 3.1).
+
+### 9.5 New integration: Google Maps
+
+- Google Maps Distance Matrix API (or Routes API, whichever is current at build time — verify before implementation) for transit-time estimation between the shop and customer addresses, factoring in live traffic.
+- Real per-call cost, not yet priced into Doc 5 — see Doc 5, Section 3.5.
+- Same reasoning as every other external dependency in this document: verify current pricing/API shape against Google's own docs immediately before building, not from this document's assumptions.
+
+### 9.6 Owner-facing experience evolution
+
+Section 6's stack already anticipated push notifications as an option ("push notification in the dashboard app, or a WhatsApp message... configurable" — Section 2.5). V1 only builds the WhatsApp half. This expansion is where the other half gets built: a genuinely polished, bilingual (Arabic/English, RTL-aware) owner interface, with real push notifications for approval requests rather than only a WhatsApp ping — likely a Progressive Web App rather than a native app initially, to get real push notifications and an app-like experience without app-store distribution overhead.
+
 ---
 
 *Next document: 03 — Development & Deployment Roadmap.*

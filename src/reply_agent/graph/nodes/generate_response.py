@@ -38,6 +38,7 @@ async def generate_response(state: GraphState) -> dict:
         business_name=business.name if business else "this seller",
         brand_voice_examples=[doc.content for doc in brand_voice_docs],
         retrieved_context=context_text,
+        delivery_estimate=state.get("delivery_estimate"),
     )
 
     history = state["conversation_history"][-6:]

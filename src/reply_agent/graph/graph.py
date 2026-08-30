@@ -1,13 +1,19 @@
 """Builds the LangGraph pipeline (Doc 2, Section 3.1, as corrected — see routers.py):
 
-ingest_message -> load_context -> classify_intent -> retrieve_knowledge -> generate_response
-    -> self_check -> [confidence router] --send----> send_reply -> update_memory -> END
-                                          --retry---> (loop back to retrieve_knowledge)
-                                          --escalate-> escalate_to_owner -> update_memory -> END
+ingest_message -> load_context -> classify_intent -> estimate_delivery -> retrieve_knowledge
+    -> generate_response -> self_check -> [confidence router]
+        --send----> send_reply -> update_memory -> END
+        --retry---> (loop back to retrieve_knowledge)
+        --escalate-> escalate_to_owner -> update_memory -> END
 
 Every message is drafted before the confidence router decides send vs. escalate — the risk
 gate (Doc 2 Section 2.4) never skips retrieve_knowledge/generate_response, it only prevents
 confidence_router from choosing "send" (Doc 1 Section 7: escalations always carry a draft).
+
+estimate_delivery (Doc 2 Section 9.1) runs unconditionally in this topology, same as every
+other node — it internally no-ops for every intent except place_order, rather than being a
+second conditional-edges branch, so the graph keeps a single linear shape with one fan-out
+point (self_check).
 """
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -15,6 +21,7 @@ from langgraph.graph import END, START, StateGraph
 
 from reply_agent.graph.nodes.classify_intent import classify_intent
 from reply_agent.graph.nodes.escalate_to_owner import escalate_to_owner
+from reply_agent.graph.nodes.estimate_delivery import estimate_delivery
 from reply_agent.graph.nodes.generate_response import generate_response
 from reply_agent.graph.nodes.ingest_message import ingest_message
 from reply_agent.graph.nodes.load_context import load_context
@@ -33,6 +40,7 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_node("ingest_message", ingest_message)
     builder.add_node("load_context", load_context)
     builder.add_node("classify_intent", classify_intent)
+    builder.add_node("estimate_delivery", estimate_delivery)
     builder.add_node("retrieve_knowledge", retrieve_knowledge)
     builder.add_node("generate_response", generate_response)
     builder.add_node("self_check", self_check)
@@ -43,7 +51,8 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_edge(START, "ingest_message")
     builder.add_edge("ingest_message", "load_context")
     builder.add_edge("load_context", "classify_intent")
-    builder.add_edge("classify_intent", "retrieve_knowledge")
+    builder.add_edge("classify_intent", "estimate_delivery")
+    builder.add_edge("estimate_delivery", "retrieve_knowledge")
     builder.add_edge("retrieve_knowledge", "generate_response")
     builder.add_edge("generate_response", "self_check")
 

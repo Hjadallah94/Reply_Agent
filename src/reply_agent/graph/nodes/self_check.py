@@ -9,7 +9,8 @@ completeness.
 
 FAIL the draft only if:
 1. It states a specific price, stock level, or delivery promise that is NOT explicitly supported
-   by the retrieved context (a fabricated or guessed fact).
+   by the retrieved context or the computed delivery estimate, if one is given below (a
+   fabricated or guessed fact).
 2. It promises something the seller's policies explicitly contradict (e.g. a cash refund when
    the policy says exchange-only).
 3. It confidently answers about the wrong product/item when the conversation history or
@@ -59,10 +60,15 @@ async def self_check(state: GraphState) -> dict:
     history_text = "\n".join(
         f"{t['role']}: {t['text']}" for t in state.get("conversation_history", [])[-6:]
     )
+    delivery_estimate = state.get("delivery_estimate")
+    delivery_text = (
+        f"\n\nComputed delivery estimate:\n{delivery_estimate}" if delivery_estimate else ""
+    )
     user_prompt = (
         f"Conversation so far:\n{history_text or '(no prior turns)'}\n\n"
         f"Customer's latest message: {state['message']['text']}\n\n"
-        f"Retrieved context:\n{context_text or '(none)'}\n\n"
+        f"Retrieved context:\n{context_text or '(none)'}"
+        f"{delivery_text}\n\n"
         f"Drafted reply:\n{draft['text']}"
     )
 

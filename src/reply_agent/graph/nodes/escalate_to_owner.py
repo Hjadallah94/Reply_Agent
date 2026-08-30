@@ -24,7 +24,14 @@ def _escalation_reason(state: GraphState) -> str:
     # than a self_check note, even if self_check happened to pass this particular draft.
     intent = state.get("intent")
     order_found = order_context_found(state.get("retrieved_context", []))
-    reason = blocking_reason(intent, order_found=order_found) if intent else None
+    delivery_estimate_found = state.get("delivery_estimate") is not None
+    reason = (
+        blocking_reason(
+            intent, order_found=order_found, delivery_estimate_found=delivery_estimate_found
+        )
+        if intent
+        else None
+    )
     if reason:
         return reason
 
