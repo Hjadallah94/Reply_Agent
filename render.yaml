@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: reply-agent-web
+    name: reply-agent-web-staging
     runtime: python
     plan: free
     # Editable, not a regular install: knowledge/loader.py's DATA_DIR resolves relative to its
@@ -13,7 +13,7 @@ services:
     startCommand: uvicorn reply_agent.api.app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ENVIRONMENT
-        value: production
+        value: staging
       - key: META_GRAPH_API_VERSION
         value: v21.0
       - key: VOYAGE_EMBEDDING_MODEL
@@ -33,11 +33,15 @@ services:
       - key: REDIS_URL
         fromService:
           type: redis
-          name: reply-agent-redis
+          name: reply-agent-redis-staging
           property: connectionString
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: VOYAGE_API_KEY
+        sync: false
+      # New for this branch's delivery-estimation feature (Doc 2 Section 9.5) — real per-call
+      # cost, unlike every Meta API used elsewhere.
+      - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: META_APP_ID
         sync: false
@@ -63,20 +67,14 @@ services:
         sync: false
 
   - type: worker
-    name: reply-agent-worker
+    name: reply-agent-worker-staging
     runtime: python
     plan: starter
-    # Editable, not a regular install: knowledge/loader.py's DATA_DIR resolves relative to its
-    # own __file__, walking up to the repo root — true when the package lives in the checkout
-    # (editable, same as local dev's `uv run`), not when pip copies it into site-packages at a
-    # different depth. That only matters for scripts/seed_business.py's demo data today (real
-    # businesses' knowledge comes from uploads, not these YAML files), but the fix needs to be
-    # portable, not a one-off.
     buildCommand: pip install -e .
     startCommand: python scripts/run_worker.py
     envVars:
       - key: ENVIRONMENT
-        value: production
+        value: staging
       - key: META_GRAPH_API_VERSION
         value: v21.0
       - key: VOYAGE_EMBEDDING_MODEL
@@ -85,10 +83,6 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
-      # memory/checkpointer.py's AsyncPostgresSaver needs this — a plain, non-Alembic-managed
-      # schema LangGraph owns itself. Missing here (only the web service had it) meant every
-      # job silently fell back to Settings' local-dev default (localhost:5433) and crashed on
-      # a Connection refused the moment run_graph() opened the checkpointer.
       - key: DATABASE_URL_SYNC
         sync: false
       - key: DATABASE_URL_APP
@@ -96,11 +90,13 @@ services:
       - key: REDIS_URL
         fromService:
           type: redis
-          name: reply-agent-redis
+          name: reply-agent-redis-staging
           property: connectionString
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: VOYAGE_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: META_APP_SECRET
         sync: false
@@ -112,6 +108,6 @@ services:
         sync: false
 
   - type: redis
-    name: reply-agent-redis
+    name: reply-agent-redis-staging
     plan: free
     ipAllowList: []
