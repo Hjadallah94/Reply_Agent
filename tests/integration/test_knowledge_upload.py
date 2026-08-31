@@ -111,9 +111,7 @@ async def test_upload_does_not_wipe_owner_corrections_or_promotions(client, busi
         await session.commit()
     await dispose_engines()
 
-    with patch(
-        "reply_agent.knowledge.loader.embed_documents", return_value=[[0.0] * 1024]
-    ):
+    with patch("reply_agent.knowledge.loader.embed_documents", return_value=[[0.0] * 1024]):
         response = client.post(
             f"/businesses/{business.id}/knowledge/upload",
             files={"file": ("catalog.xlsx", _workbook_bytes(), "application/octet-stream")},

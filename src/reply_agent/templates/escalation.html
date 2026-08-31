@@ -17,6 +17,6 @@
 
 <form method="post" action="/businesses/{{ business.id }}/dashboard/escalations/{{ escalation.id }}/resolve">
   <textarea name="reply_text" required>{{ escalation.drafted_reply or "" }}</textarea>
-  <button type="submit">Send reply</button>
+  <button type="submit">{{ t('escalation.send_reply') }}</button>
 </form>
 {% endblock %}

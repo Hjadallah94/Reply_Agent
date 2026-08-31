@@ -181,6 +181,51 @@ async def test_dashboard_redirects_to_login_when_not_authenticated():
     assert response.headers["location"] == "/login"
 
 
+# --- Bilingual dashboard (Doc 3 Phase 6.6) -------------------------------------------------
+
+
+async def test_dashboard_defaults_to_english_and_ltr(client, escalation):
+    business, _ = escalation
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert 'dir="ltr"' in response.text
+    assert "Needs your reply" in response.text
+
+
+async def test_set_language_to_arabic_persists_and_flips_rtl(client, escalation):
+    business, _ = escalation
+    response = client.post(
+        "/set-language",
+        data={"lang": "ar", "next": f"/businesses/{business.id}/dashboard"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+
+    # Each TestClient call spins its own event loop (see test_resolve_already_resolved_returns_409
+    # above) — dispose between calls, not just around raw DB session access.
+    await dispose_engines()
+    dashboard_response = client.get(f"/businesses/{business.id}/dashboard")
+    assert dashboard_response.status_code == 200
+    assert 'dir="rtl"' in dashboard_response.text
+    assert "بحاجة لردك" in dashboard_response.text  # "Needs your reply"
+
+
+async def test_set_language_rejects_unsupported_language(client, escalation):
+    response = client.post("/set-language", data={"lang": "fr", "next": "/dashboard"})
+    assert response.status_code == 400
+
+
+async def test_set_language_guards_against_open_redirect(client, escalation):
+    response = client.post(
+        "/set-language",
+        data={"lang": "ar", "next": "https://evil.example.com/phish"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/dashboard"
+
+
 async def test_business_dashboard_lists_the_escalation(client, escalation):
     business, esc = escalation
     response = client.get(f"/businesses/{business.id}/dashboard")

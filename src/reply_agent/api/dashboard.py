@@ -7,6 +7,7 @@ enforces that same boundary again at the database level (row-level security, not
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -40,6 +41,7 @@ from reply_agent.db.models import (
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from reply_agent.graph.nodes.send_reply import send_reply
+from reply_agent.i18n import SUPPORTED_LANGUAGES, get_lang, t, t_status
 from reply_agent.knowledge.catalog import (
     create_product,
     create_promotion,
@@ -58,11 +60,34 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 AMMAN_TZ = ZoneInfo("Asia/Amman")
 
 
+def _render(request: Request, name: str, **context):
+    """Every dashboard template render goes through here (Doc 3 Phase 6.6) so lang/t/t_status
+    can never be forgotten on one route — a plain templates.TemplateResponse(...) call would
+    silently render English-only chrome regardless of the viewer's language preference.
+    """
+    lang = get_lang(request)
+    context.setdefault("lang", lang)
+    context.setdefault("t", partial(t, lang))
+    context.setdefault("t_status", partial(t_status, lang))
+    return templates.TemplateResponse(request, name, context)
+
+
 @router.get("/dashboard")
 async def dashboard_redirect(request: Request):
     # No multi-business list — a user has exactly one business, straight there or to /login.
     user = await get_current_user(request)
     return RedirectResponse(url=f"/businesses/{user.business_id}/dashboard", status_code=303)
+
+
+@router.post("/set-language")
+async def set_language(request: Request, lang: str = Form(...), next: str = Form("/dashboard")):
+    if lang not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail="Unsupported language")
+    # Open-redirect guard: only ever redirect to a same-origin relative path, never an
+    # absolute or protocol-relative URL a malicious `next` value could point elsewhere.
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
+    request.session["lang"] = lang
+    return RedirectResponse(url=safe_next, status_code=303)
 
 
 @router.get("/businesses/{business_id}/dashboard")
@@ -169,17 +194,15 @@ async def business_dashboard(
             for c in conversations
         ]
 
-    return templates.TemplateResponse(
+    return _render(
         request,
         "dashboard.html",
-        {
-            "business": business,
-            "usage": usage,
-            "pending_escalations": pending_rows,
-            "pending_approvals": pending_approval_rows,
-            "recent_auto_approvals": recent_auto_approval_rows,
-            "conversations": conversation_rows,
-        },
+        business=business,
+        usage=usage,
+        pending_escalations=pending_rows,
+        pending_approvals=pending_approval_rows,
+        recent_auto_approvals=recent_auto_approval_rows,
+        conversations=conversation_rows,
     )
 
 
@@ -268,16 +291,14 @@ async def escalation_detail(
             for m in conversation.messages
         ]
 
-    return templates.TemplateResponse(
+    return _render(
         request,
         "escalation.html",
-        {
-            "business": business,
-            "escalation": escalation,
-            "customer_handle": conversation.customer.channel_handle,
-            "channel": conversation.channel.value,
-            "messages": messages,
-        },
+        business=business,
+        escalation=escalation,
+        customer_handle=conversation.customer.channel_handle,
+        channel=conversation.channel.value,
+        messages=messages,
     )
 
 
@@ -386,19 +407,16 @@ async def approval_detail(
             for m in conversation.messages
         ]
 
-    return templates.TemplateResponse(
+    lang = get_lang(request)
+    return _render(
         request,
         "approval.html",
-        {
-            "business": business,
-            "approval": approval,
-            "customer_handle": conversation.customer.channel_handle,
-            "channel": conversation.channel.value,
-            "messages": messages,
-            "reject_default": (
-                "Sorry, that delivery time isn't approved — we can get it to you tomorrow instead."
-            ),
-        },
+        business=business,
+        approval=approval,
+        customer_handle=conversation.customer.channel_handle,
+        channel=conversation.channel.value,
+        messages=messages,
+        reject_default=t(lang, "approval.reject_default_text"),
     )
 
 
@@ -518,24 +536,25 @@ async def catalog_list(request: Request, business: Business = Depends(require_bu
         ).all()
 
     now = datetime.now(UTC)
-    return templates.TemplateResponse(
+    return _render(
         request,
         "catalog.html",
-        {
-            "business": business,
-            "products": products,
-            "promotions": promotions,
-            "now": now,
-        },
+        business=business,
+        products=products,
+        promotions=promotions,
+        now=now,
     )
 
 
 @router.get("/businesses/{business_id}/dashboard/catalog/products/new")
 async def new_product_form(request: Request, business: Business = Depends(require_business_access)):
-    return templates.TemplateResponse(
+    return _render(
         request,
         "product_form.html",
-        {"business": business, "document": None, "product": None, "variants_text": ""},
+        business=business,
+        document=None,
+        product=None,
+        variants_text="",
     )
 
 
@@ -579,15 +598,13 @@ async def edit_product_form(
     variants_text = "; ".join(
         f"{v['label']}:{v['stock_status']}" for v in document.structured_data.get("variants", [])
     )
-    return templates.TemplateResponse(
+    return _render(
         request,
         "product_form.html",
-        {
-            "business": business,
-            "document": document,
-            "product": document.structured_data,
-            "variants_text": variants_text,
-        },
+        business=business,
+        document=document,
+        product=document.structured_data,
+        variants_text=variants_text,
     )
 
 
@@ -638,11 +655,7 @@ async def delete_product_route(
 async def new_promotion_form(
     request: Request, business: Business = Depends(require_business_access)
 ):
-    return templates.TemplateResponse(
-        request,
-        "promotion_form.html",
-        {"business": business, "document": None, "promotion": None},
-    )
+    return _render(request, "promotion_form.html", business=business, document=None, promotion=None)
 
 
 def _promotion_from_form(
@@ -694,20 +707,22 @@ async def edit_promotion_form(
             KnowledgeDocType.promotion,
         )
 
-    return templates.TemplateResponse(
+    return _render(
         request,
         "promotion_form.html",
-        {
-            "business": business,
-            "document": document,
-            "promotion": document.structured_data,
-            "starts_at_local": document.active_from.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
+        business=business,
+        document=document,
+        promotion=document.structured_data,
+        starts_at_local=(
+            document.active_from.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
             if document.active_from
-            else "",
-            "ends_at_local": document.active_until.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
+            else ""
+        ),
+        ends_at_local=(
+            document.active_until.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
             if document.active_until
-            else "",
-        },
+            else ""
+        ),
     )
 
 

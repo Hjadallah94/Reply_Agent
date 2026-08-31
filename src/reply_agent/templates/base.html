@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang | default('en') }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -161,8 +161,8 @@
     font-size: 13.5px;
   }
   .auth-form .switch { font-size: 13.5px; color: var(--text-muted); text-align: center; }
-  .logout-form { margin-left: auto; }
-  .logout-form button {
+  .header-actions { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+  .logout-form button, .lang-form button {
     margin-top: 0;
     background: none;
     color: var(--text-muted);
@@ -171,7 +171,11 @@
     font-size: 13px;
     font-weight: 500;
   }
-  .logout-form button:hover { color: var(--text); opacity: 1; border-color: var(--accent); }
+  .logout-form button:hover, .lang-form button:hover {
+    color: var(--text);
+    opacity: 1;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -179,9 +183,26 @@
   <a href="/dashboard">Reply Agent</a>
   {% if business %}<span class="biz">— {{ business.name }}</span>{% endif %}
   {% if business %}
-  <form class="logout-form" method="post" action="/logout">
-    <button type="submit">Log out</button>
-  </form>
+  <div class="header-actions">
+    {% if t is defined %}
+    {# Only pages rendered through api/dashboard.py's _render() (Doc 3 Phase 6.6) have
+       translations at all — the toggle would otherwise flip dir="rtl" on an English-only
+       page like onboarding, a broken half-translated state. #}
+    <form class="lang-form" method="post" action="/set-language">
+      <input type="hidden" name="next" value="{{ request.url.path }}">
+      {% if lang == 'ar' %}
+        <input type="hidden" name="lang" value="en">
+        <button type="submit">English</button>
+      {% else %}
+        <input type="hidden" name="lang" value="ar">
+        <button type="submit">العربية</button>
+      {% endif %}
+    </form>
+    {% endif %}
+    <form class="logout-form" method="post" action="/logout">
+      <button type="submit">{{ t('base.logout') if t is defined else 'Log out' }}</button>
+    </form>
+  </div>
   {% endif %}
 </header>
 <main>

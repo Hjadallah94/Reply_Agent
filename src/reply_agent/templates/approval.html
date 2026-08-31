@@ -15,15 +15,15 @@
   {% endfor %}
 </div>
 
-<h2 style="margin: 24px 0 10px;">Approve</h2>
+<h2 style="margin: 24px 0 10px;">{{ t('approval.approve_heading') }}</h2>
 <form method="post" action="/businesses/{{ business.id }}/dashboard/approvals/{{ approval.id }}/approve">
   <textarea name="reply_text" required>{{ approval.drafted_reply }}</textarea>
-  <button type="submit">Send reply</button>
+  <button type="submit">{{ t('approval.send_reply') }}</button>
 </form>
 
-<h2 style="margin: 24px 0 10px;">Reject</h2>
+<h2 style="margin: 24px 0 10px;">{{ t('approval.reject_heading') }}</h2>
 <form method="post" action="/businesses/{{ business.id }}/dashboard/approvals/{{ approval.id }}/reject">
   <textarea name="reply_text" required>{{ reject_default }}</textarea>
-  <button type="submit">Not approved — tell customer tomorrow</button>
+  <button type="submit">{{ t('approval.reject_button') }}</button>
 </form>
 {% endblock %}
