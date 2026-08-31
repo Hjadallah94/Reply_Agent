@@ -3,6 +3,8 @@ send, same pattern as tests/unit/test_send_reply.py. Every route here is gated b
 auth/dependencies.py — tests log in via tests/auth_helpers.py the same way a browser would.
 """
 
+import uuid
+from datetime import UTC, datetime
 from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
@@ -29,6 +31,7 @@ from reply_agent.db.models import (
     Order,
 )
 from reply_agent.db.session import get_sessionmaker
+from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Dashboard Test Business"
@@ -430,6 +433,9 @@ async def test_approve_sends_updates_db_and_redirects(client, approval):
         refreshed = await session.get(ApprovalRequest, appr.id)
         assert refreshed.status == ApprovalRequestStatus.approved
         assert refreshed.resolved_by == "owner"
+        # Edited before sending — doesn't count toward the adaptive-autonomy streak
+        # (graph/nodes/request_owner_approval.py's _matches_learned_pattern).
+        assert refreshed.sent_unchanged is False
 
         conversation = await session.get(Conversation, appr.conversation_id)
         assert conversation.status == ConversationStatus.auto
@@ -497,6 +503,12 @@ async def test_approve_unchanged_records_no_correction(client, approval):
 
     mock_embed.assert_not_called()
 
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(ApprovalRequest, appr.id)
+        assert refreshed.sent_unchanged is True
+
 
 async def test_reject_sends_tomorrow_message_and_updates_order(client, approval):
     business, appr = approval
@@ -522,6 +534,7 @@ async def test_reject_sends_tomorrow_message_and_updates_order(client, approval)
     async with get_sessionmaker()() as session:
         refreshed = await session.get(ApprovalRequest, appr.id)
         assert refreshed.status == ApprovalRequestStatus.rejected
+        assert refreshed.sent_unchanged is False
 
         conversation = await session.get(Conversation, appr.conversation_id)
         assert conversation.status == ConversationStatus.auto
@@ -566,3 +579,37 @@ async def test_approval_rejects_blank_reply(client, approval):
         data={"reply_text": "   "},
     )
     assert response.status_code == 400
+
+
+async def test_dashboard_shows_recently_auto_approved_section(client, approval):
+    business, appr = approval
+
+    async with get_sessionmaker()() as session:
+        session.add(
+            ApprovalRequest(
+                id=uuid.uuid4(),
+                conversation_id=appr.conversation_id,
+                drafted_reply="Auto-sent draft.",
+                reasoning="Learned pattern.",
+                estimated_window="3-4 hours",
+                status=ApprovalRequestStatus.approved,
+                resolved_by=AUTO_APPROVAL_RESOLVED_BY,
+                sent_unchanged=True,
+                resolution_time=datetime.now(UTC),
+            )
+        )
+        await session.commit()
+    await dispose_engines()
+
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert "Recently auto-approved" in response.text
+    assert "962790002222" in response.text
+    assert "3-4 hours" in response.text
+
+
+async def test_dashboard_omits_auto_approved_section_when_theres_none(client, approval):
+    business, _appr = approval
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert "Recently auto-approved" not in response.text

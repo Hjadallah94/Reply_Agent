@@ -6,7 +6,7 @@ enforces that same boundary again at the database level (row-level security, not
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -34,6 +34,7 @@ from reply_agent.db.models import (
     Order,
 )
 from reply_agent.db.tenant_session import tenant_session
+from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from reply_agent.graph.nodes.send_reply import send_reply
 from reply_agent.knowledge.corrections import record_owner_correction
 
@@ -104,6 +105,35 @@ async def business_dashboard(
             for a in pending_approval_records
         ]
 
+        # Adaptive autonomy's explainability surface (Doc 2 Section 9.4): read-only visibility
+        # into what the system has started sending on its own, so the owner can always see why —
+        # not a UI they act on, unlike the two sections above.
+        recent_auto_approvals = (
+            await session.scalars(
+                select(ApprovalRequest)
+                .join(Conversation)
+                .where(
+                    Conversation.business_id == business.id,
+                    ApprovalRequest.resolved_by == AUTO_APPROVAL_RESOLVED_BY,
+                    ApprovalRequest.resolution_time >= datetime.now(UTC) - timedelta(days=7),
+                )
+                .options(
+                    selectinload(ApprovalRequest.conversation).selectinload(Conversation.customer)
+                )
+                .order_by(ApprovalRequest.resolution_time.desc())
+            )
+        ).all()
+
+        recent_auto_approval_rows = [
+            {
+                "customer_handle": a.conversation.customer.channel_handle,
+                "channel": a.conversation.channel.value,
+                "estimated_window": a.estimated_window,
+                "resolution_time": a.resolution_time.strftime("%Y-%m-%d %H:%M"),
+            }
+            for a in recent_auto_approvals
+        ]
+
         conversations = (
             await session.scalars(
                 select(Conversation)
@@ -131,6 +161,7 @@ async def business_dashboard(
             "usage": usage,
             "pending_escalations": pending_rows,
             "pending_approvals": pending_approval_rows,
+            "recent_auto_approvals": recent_auto_approval_rows,
             "conversations": conversation_rows,
         },
     )
@@ -420,6 +451,10 @@ async def approve_approval(
         approval.status = ApprovalRequestStatus.approved
         approval.resolved_by = "owner"
         approval.resolution_time = datetime.now(UTC)
+        # Adaptive autonomy's training signal (Doc 2 Section 9.4, graph/nodes/
+        # request_owner_approval.py's _matches_learned_pattern) — only an unedited approval
+        # counts toward earning auto-approval for this (business, estimated_window) pattern.
+        approval.sent_unchanged = reply_text == (approval.drafted_reply or "")
         conversation.status = ConversationStatus.auto
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
@@ -487,6 +522,9 @@ async def reject_approval(
         approval.status = ApprovalRequestStatus.rejected
         approval.resolved_by = "owner"
         approval.resolution_time = datetime.now(UTC)
+        # A reject is never "unchanged" — set explicitly (rather than left null) so it reads
+        # unambiguously alongside sent_unchanged=True/False on approved rows.
+        approval.sent_unchanged = False
         conversation.status = ConversationStatus.auto
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)

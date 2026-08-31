@@ -64,6 +64,20 @@
   <p class="empty">No same-day commitments waiting on you right now.</p>
 {% endif %}
 
+{% if recent_auto_approvals %}
+<h2 style="margin: 28px 0 10px;">Recently auto-approved</h2>
+<p class="muted" style="margin: 0 0 12px;">The agent has learned these delivery windows are reliable and sent them without waiting on you.</p>
+  {% for a in recent_auto_approvals %}
+  <div class="card row">
+    <div>
+      <strong>{{ a.customer_handle }}</strong>
+      <p class="muted" style="margin: 4px 0 0;">{{ a.estimated_window }} delivery — {{ a.resolution_time }}</p>
+    </div>
+    <span class="badge resolved">{{ a.channel }}</span>
+  </div>
+  {% endfor %}
+{% endif %}
+
 <div class="row" style="align-items: baseline;">
   <h2 style="margin: 28px 0 10px;">Recent conversations</h2>
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/export">Download as Excel</a>

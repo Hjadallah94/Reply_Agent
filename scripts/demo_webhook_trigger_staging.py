@@ -8,7 +8,7 @@ Defaults to Amman Cookie Co's phone_number_id ("demo-cookie-shop-001", seeded sp
 this purpose — see scripts/seed_business.py) so it routes to the real cookie catalog/address/
 delivery_rules, not a business needing a temporary workaround.
 
-Usage: uv run python scripts/demo_webhook_trigger_staging.py "I'd like to order 1 box of 6 Classic Chocolate Chip cookies, deliver to Sweifieh, Amman"
+Usage: uv run python scripts/demo_webhook_trigger_staging.py "1 box of 6 Chocolate Chip"
        uv run python scripts/demo_webhook_trigger_staging.py "..." 962790005555  # pick a fresh
        thread by using a different fake customer number — avoids stacking multiple unresolved
        order messages onto the same conversation, which confuses generate_response about which
@@ -74,7 +74,11 @@ def build_payload(text: str, phone_number_id: str, customer_number: str) -> dict
 
 
 def main() -> None:
-    text = sys.argv[1] if len(sys.argv) > 1 else "I'd like to order 1 box of 6 Classic Chocolate Chip cookies, deliver to Sweifieh, Amman"
+    text = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "I'd like to order 1 box of 6 Classic Chocolate Chip cookies, deliver to Sweifieh"
+    )
     customer_number = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_CUSTOMER_NUMBER
     settings = get_settings()
 

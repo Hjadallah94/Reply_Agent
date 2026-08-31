@@ -15,6 +15,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -368,6 +369,15 @@ class ApprovalRequest(Base):
     # the reject route update it to reflect "tomorrow" instead of the declined same-day promise,
     # without a second migration on the orders table.
     order_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The two fields below exist for adaptive autonomy (Doc 2 Section 9.4,
+    # graph/nodes/request_owner_approval.py's _matches_learned_pattern) — a business earns
+    # auto-approval for a specific (business_id, estimated_window) pattern once its last N
+    # resolved requests in that pattern are all approved with sent_unchanged=True.
+    # estimated_window doubles as the pattern-matching key: it's already the exact string shown
+    # to both the owner and the customer, so reusing it avoids inventing new numeric bucket
+    # boundaries the doc doesn't specify.
+    estimated_window: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_unchanged: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     status: Mapped[ApprovalRequestStatus] = mapped_column(
         Enum(ApprovalRequestStatus, name="approval_request_status"),
         nullable=False,
