@@ -367,6 +367,34 @@ async def test_resolve_approving_the_draft_unchanged_records_no_correction(clien
         assert correction is None
 
 
+async def test_resolve_unchanged_with_crlf_line_endings_still_counts_as_unchanged(
+    client, escalation
+):
+    """Same bug as the approval-route regression test above — a <textarea> submission
+    normalizes to \\r\\n while drafted_reply uses plain \\n; an unedited resolve must not be
+    misrecorded as an owner correction just because of line-ending noise.
+    """
+    business, esc = escalation
+
+    async with get_sessionmaker()() as session:
+        db_escalation = await session.get(Escalation, esc.id)
+        db_escalation.drafted_reply = "Line one.\nLine two."
+        await session.commit()
+    await dispose_engines()
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch("reply_agent.knowledge.corrections.embed_documents") as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/escalations/{esc.id}/resolve",
+            data={"reply_text": "Line one.\r\nLine two."},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_not_called()
+
+
 async def test_resolve_already_resolved_returns_409(client, escalation):
     business, esc = escalation
 
@@ -550,6 +578,41 @@ async def test_approve_unchanged_records_no_correction(client, approval):
 
     await dispose_engines()
 
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(ApprovalRequest, appr.id)
+        assert refreshed.sent_unchanged is True
+
+
+async def test_approve_unchanged_with_crlf_line_endings_still_counts_as_unchanged(
+    client, approval
+):
+    """A <textarea> form submission always normalizes line breaks to \\r\\n per the HTML spec,
+    but drafted_reply (the LLM's own output) uses plain \\n — a real bug found live during
+    Phase 6d verification: an unedited approval submitted through an actual browser was
+    incorrectly recorded as sent_unchanged=False, silently breaking the adaptive-autonomy
+    streak every single time.
+    """
+    business, appr = approval
+
+    async with get_sessionmaker()() as session:
+        db_approval = await session.get(ApprovalRequest, appr.id)
+        db_approval.drafted_reply = "Line one.\nLine two."
+        await session.commit()
+    await dispose_engines()
+
+    with (
+        patch("reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()),
+        patch("reply_agent.knowledge.corrections.embed_documents") as mock_embed,
+    ):
+        client.post(
+            f"/businesses/{business.id}/dashboard/approvals/{appr.id}/approve",
+            data={"reply_text": "Line one.\r\nLine two."},
+            follow_redirects=False,
+        )
+
+    mock_embed.assert_not_called()
+
+    await dispose_engines()
     async with get_sessionmaker()() as session:
         refreshed = await session.get(ApprovalRequest, appr.id)
         assert refreshed.sent_unchanged is True

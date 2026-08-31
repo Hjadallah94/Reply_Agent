@@ -309,7 +309,13 @@ async def resolve_escalation(
     reply_text: str = Form(...),
     business: Business = Depends(require_business_access),
 ):
-    reply_text = reply_text.strip()
+    # A <textarea> form submission always normalizes line breaks to \r\n (CRLF) per the HTML
+    # spec, but the LLM's own drafted_reply uses plain \n — normalize before comparing, or an
+    # unedited approval/resolve would spuriously look "changed" every single time, breaking the
+    # adaptive-autonomy streak (graph/nodes/request_owner_approval.py) and falsely recording an
+    # owner-correction that's actually the model's own words. Found live during Phase 6d
+    # verification: a real dashboard approve, no edits made, still failed `== drafted_reply`.
+    reply_text = reply_text.strip().replace("\r\n", "\n")
     if not reply_text:
         raise HTTPException(status_code=400, detail="Reply text is required")
 
@@ -427,7 +433,13 @@ async def approve_approval(
     reply_text: str = Form(...),
     business: Business = Depends(require_business_access),
 ):
-    reply_text = reply_text.strip()
+    # A <textarea> form submission always normalizes line breaks to \r\n (CRLF) per the HTML
+    # spec, but the LLM's own drafted_reply uses plain \n — normalize before comparing, or an
+    # unedited approval/resolve would spuriously look "changed" every single time, breaking the
+    # adaptive-autonomy streak (graph/nodes/request_owner_approval.py) and falsely recording an
+    # owner-correction that's actually the model's own words. Found live during Phase 6d
+    # verification: a real dashboard approve, no edits made, still failed `== drafted_reply`.
+    reply_text = reply_text.strip().replace("\r\n", "\n")
     if not reply_text:
         raise HTTPException(status_code=400, detail="Reply text is required")
 
@@ -774,7 +786,13 @@ async def reject_approval(
     reply_text: str = Form(...),
     business: Business = Depends(require_business_access),
 ):
-    reply_text = reply_text.strip()
+    # A <textarea> form submission always normalizes line breaks to \r\n (CRLF) per the HTML
+    # spec, but the LLM's own drafted_reply uses plain \n — normalize before comparing, or an
+    # unedited approval/resolve would spuriously look "changed" every single time, breaking the
+    # adaptive-autonomy streak (graph/nodes/request_owner_approval.py) and falsely recording an
+    # owner-correction that's actually the model's own words. Found live during Phase 6d
+    # verification: a real dashboard approve, no edits made, still failed `== drafted_reply`.
+    reply_text = reply_text.strip().replace("\r\n", "\n")
     if not reply_text:
         raise HTTPException(status_code=400, detail="Reply text is required")
 
