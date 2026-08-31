@@ -40,7 +40,7 @@
           <span class="badge resolved">{{ t_status('active') }}</span>
         {% endif %}
       </div>
-      <p class="muted" style="margin: 6px 0 0;">{{ promo.structured_data.discount_text }} — {{ t('catalog.until') }} {{ promo.active_until.strftime("%Y-%m-%d %H:%M") if promo.active_until else "—" }}</p>
+      <p class="muted" style="margin: 6px 0 0;">{{ promo.structured_data.discount_text }} — {{ t('catalog.until') }} {{ promo.active_until.astimezone(amman_tz).strftime("%Y-%m-%d %H:%M") if promo.active_until else "—" }}</p>
     </div>
   </a>
   {% endfor %}

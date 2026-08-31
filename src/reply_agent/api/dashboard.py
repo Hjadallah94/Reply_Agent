@@ -69,6 +69,7 @@ def _render(request: Request, name: str, **context):
     context.setdefault("lang", lang)
     context.setdefault("t", partial(t, lang))
     context.setdefault("t_status", partial(t_status, lang))
+    context.setdefault("amman_tz", AMMAN_TZ)
     return templates.TemplateResponse(request, name, context)
 
 
