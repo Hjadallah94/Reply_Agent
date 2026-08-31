@@ -46,7 +46,7 @@ def _require_columns(headers: list[str], required: list[str], sheet_name: str) -
         )
 
 
-def _parse_variants(cell: object) -> list[ProductVariant]:
+def parse_variants(cell: object) -> list[ProductVariant]:
     if not cell or not str(cell).strip():
         return []
     variants = []
@@ -83,7 +83,7 @@ def parse_catalog_workbook(file, business_slug: str) -> tuple[KnowledgeBase, lis
                             description=str(row.get("description") or "").strip(),
                             price_jod=float(row["price_jod"]),
                             stock_status=str(row.get("stock_status") or "in_stock").strip(),
-                            variants=_parse_variants(row.get("variants")),
+                            variants=parse_variants(row.get("variants")),
                         )
                     )
                 except (ValidationError, KeyError, TypeError, ValueError) as exc:

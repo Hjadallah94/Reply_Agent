@@ -7,7 +7,7 @@ from the ingestion pipeline instead of from disk.
 from pathlib import Path
 
 import yaml
-from sqlalchemy import delete
+from sqlalchemy import and_, delete, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reply_agent.db.models import KnowledgeDocType, KnowledgeDocument
@@ -41,13 +41,39 @@ def load_knowledge_base(business_slug: str) -> KnowledgeBase:
 
 
 async def sync_knowledge_base(session: AsyncSession, business_id, kb: KnowledgeBase) -> int:
-    """Replaces all knowledge_documents rows for this business with the given KnowledgeBase.
-    Returns the number of documents written. Doesn't commit — the caller owns the transaction
-    (a plain script commits once at the end; api/knowledge.py's tenant_session commits on its
-    own block exit, and committing here too would end that transaction early).
+    """Replaces all product/policy/faq/brand_voice knowledge_documents rows for this business
+    with the given KnowledgeBase. Returns the number of documents written. Doesn't commit — the
+    caller owns the transaction (a plain script commits once at the end; api/knowledge.py's
+    tenant_session commits on its own block exit, and committing here too would end that
+    transaction early).
+
+    The delete below is deliberately narrower than "everything for this business": product/
+    policy/faq rows always go (a KnowledgeBase always fully replaces those), and brand_voice
+    rows go *unless* they carry knowledge/corrections.py's owner-correction marker
+    (structured_data.source == "owner_correction"). Two real, previously-silent bugs this
+    fixes: parse_catalog_workbook never populates brand_voice_samples (no such sheet in a
+    spreadsheet upload), so a blanket delete would wipe every owner-correction sample on the
+    next spreadsheet re-upload even though the upload never meant to touch them; a blanket
+    delete would also wipe any promotion (knowledge/catalog.py, dashboard-only, Doc 3 Phase
+    6.5) a business created, which promotion rows never being product/policy/faq/brand_voice
+    with that marker already keeps out of this delete. YAML-sourced brand_voice samples (no
+    marker) still get replaced on each call, same as before — scripts/seed_business.py stays
+    idempotent across re-runs.
     """
     await session.execute(
-        delete(KnowledgeDocument).where(KnowledgeDocument.business_id == business_id)
+        delete(KnowledgeDocument).where(
+            KnowledgeDocument.business_id == business_id,
+            or_(
+                KnowledgeDocument.type.in_(
+                    [KnowledgeDocType.product, KnowledgeDocType.policy, KnowledgeDocType.faq]
+                ),
+                and_(
+                    KnowledgeDocument.type == KnowledgeDocType.brand_voice,
+                    func.coalesce(KnowledgeDocument.structured_data["source"].astext, "")
+                    != "owner_correction",
+                ),
+            ),
+        )
     )
 
     entries: list[tuple[KnowledgeDocType, str, dict]] = []

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit promotion" if document else "Add promotion" }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard/catalog">&larr; Catalog</a>
+<h1>{{ "Edit promotion" if document else "Add promotion" }}</h1>
+
+<form method="post" action="{{ '/businesses/%s/dashboard/catalog/promotions/%s/edit' % (business.id, document.id) if document else '/businesses/%s/dashboard/catalog/promotions/new' % business.id }}">
+  <div class="field">
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" value="{{ promotion.title if promotion else '' }}" required>
+  </div>
+  <div class="field">
+    <label for="description">Description</label>
+    <textarea id="description" name="description" style="min-height: 70px;">{{ promotion.description if promotion else '' }}</textarea>
+  </div>
+  <div class="field">
+    <label for="discount_text">Discount</label>
+    <input type="text" id="discount_text" name="discount_text" value="{{ promotion.discount_text if promotion else '' }}" required>
+    <span class="hint">Free text — e.g. "20% off" or "3 for 10 JOD"</span>
+  </div>
+  <div class="field">
+    <label for="applies_to">Applies to</label>
+    <input type="text" id="applies_to" name="applies_to" value="{{ promotion.applies_to if promotion else '' }}">
+    <span class="hint">Optional — which product or category this covers</span>
+  </div>
+  <div class="field">
+    <label for="starts_at">Starts</label>
+    <input type="datetime-local" id="starts_at" name="starts_at" value="{{ starts_at_local if starts_at_local is defined else '' }}" required>
+  </div>
+  <div class="field">
+    <label for="ends_at">Ends</label>
+    <input type="datetime-local" id="ends_at" name="ends_at" value="{{ ends_at_local if ends_at_local is defined else '' }}" required>
+    <span class="hint">Amman time — the agent stops mentioning this promotion after it ends</span>
+  </div>
+  <button type="submit">{{ "Save changes" if document else "Add promotion" }}</button>
+</form>
+
+{% if document %}
+<form method="post" action="/businesses/{{ business.id }}/dashboard/catalog/promotions/{{ document.id }}/delete" style="margin-top: 10px;">
+  <button type="submit" style="background: none; color: var(--text-muted); border: 1px solid var(--border);">Delete promotion</button>
+</form>
+{% endif %}
+{% endblock %}

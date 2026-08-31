@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit product" if document else "Add product" }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard/catalog">&larr; Catalog</a>
+<h1>{{ "Edit product" if document else "Add product" }}</h1>
+
+<form method="post" action="{{ '/businesses/%s/dashboard/catalog/products/%s/edit' % (business.id, document.id) if document else '/businesses/%s/dashboard/catalog/products/new' % business.id }}">
+  <div class="field">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ product.name if product else '' }}" required>
+  </div>
+  <div class="field">
+    <label for="description">Description</label>
+    <textarea id="description" name="description" style="min-height: 70px;">{{ product.description if product else '' }}</textarea>
+  </div>
+  <div class="field">
+    <label for="price_jod">Price (JOD)</label>
+    <input type="number" step="0.01" min="0" id="price_jod" name="price_jod" value="{{ product.price_jod if product else '' }}" required>
+  </div>
+  <div class="field">
+    <label for="stock_status">Stock status</label>
+    <input type="text" id="stock_status" name="stock_status" value="{{ product.stock_status if product else 'in_stock' }}">
+    <span class="hint">in_stock, out_of_stock, or made_to_order</span>
+  </div>
+  <div class="field">
+    <label for="variants">Variants</label>
+    <input type="text" id="variants" name="variants" value="{{ variants_text }}">
+    <span class="hint">Optional — e.g. "box of 6:in_stock; box of 12:out_of_stock"</span>
+  </div>
+  <button type="submit">{{ "Save changes" if document else "Add product" }}</button>
+</form>
+
+{% if document %}
+<form method="post" action="/businesses/{{ business.id }}/dashboard/catalog/products/{{ document.id }}/delete" style="margin-top: 10px;">
+  <button type="submit" style="background: none; color: var(--text-muted); border: 1px solid var(--border);">Delete product</button>
+</form>
+{% endif %}
+{% endblock %}

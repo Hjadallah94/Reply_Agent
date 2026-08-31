@@ -57,6 +57,9 @@ class KnowledgeDocType(enum.StrEnum):
     policy = "policy"
     faq = "faq"
     brand_voice = "brand_voice"
+    # Dashboard-only (Doc 3 Phase 6.5) — never part of a spreadsheet upload/KnowledgeBase, see
+    # knowledge/catalog.py. active_from/active_until below only ever get set on this type.
+    promotion = "promotion"
 
 
 class ConversationStatus(enum.StrEnum):
@@ -151,6 +154,12 @@ class KnowledgeDocument(Base):
         Vector(EMBEDDING_DIM), nullable=True
     )
     source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Time-bound promotional content (Doc 3 Phase 6.5) — only ever set on type=promotion rows,
+    # NULL for everything else. graph/nodes/retrieve_knowledge.py filters on these unconditionally
+    # (a blanket NULL-or-in-range check), which is safe precisely because no other type touches
+    # them. Real columns rather than structured_data fields since they must be filterable in SQL.
+    active_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    active_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

@@ -5,7 +5,9 @@ generation) never needs to know whether a document came from hand-written YAML o
 ingestion pipeline.
 """
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProductVariant(BaseModel):
@@ -49,6 +51,37 @@ class FAQPair(BaseModel):
 class BrandVoiceSample(BaseModel):
     customer_message: str
     seller_reply: str
+
+
+class Promotion(BaseModel):
+    """Dashboard-only (Doc 3 Phase 6.5) — deliberately not part of KnowledgeBase below, since
+    there's no spreadsheet sheet for it and the roadmap explicitly frames promotions as
+    "managed directly" rather than re-uploaded. See knowledge/catalog.py and api/dashboard.py.
+    """
+
+    title: str
+    description: str = ""
+    discount_text: str  # free-form ("20% off", "3 for 10 JOD") — sellers phrase promos too
+    # variably to force a numeric-only discount model.
+    applies_to: str = ""  # optional, e.g. which product/category it targets
+    starts_at: datetime
+    ends_at: datetime
+
+    @model_validator(mode="after")
+    def _ends_after_starts(self) -> "Promotion":
+        if self.ends_at < self.starts_at:
+            raise ValueError("ends_at must not be before starts_at")
+        return self
+
+    def to_text(self) -> str:
+        lines = [f"Promotion: {self.title}"]
+        if self.description:
+            lines.append(self.description)
+        lines.append(f"Discount: {self.discount_text}")
+        if self.applies_to:
+            lines.append(f"Applies to: {self.applies_to}")
+        lines.append(f"Valid: {self.starts_at.isoformat()} to {self.ends_at.isoformat()}")
+        return "\n".join(lines)
 
 
 class KnowledgeBase(BaseModel):

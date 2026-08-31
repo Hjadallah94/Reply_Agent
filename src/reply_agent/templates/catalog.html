@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Catalog — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>Catalog</h1>
+
+<div class="row" style="align-items: baseline;">
+  <h2 style="margin: 0 0 10px;">Products</h2>
+  <a class="export-link" href="/businesses/{{ business.id }}/dashboard/catalog/products/new">+ Add product</a>
+</div>
+{% if products %}
+  {% for p in products %}
+  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/catalog/products/{{ p.id }}/edit">
+    <div class="card">
+      <div class="row">
+        <strong>{{ p.structured_data.name }}</strong>
+        <span class="badge {{ 'resolved' if p.structured_data.stock_status == 'in_stock' else 'closed' }}">{{ p.structured_data.stock_status }}</span>
+      </div>
+      <p class="muted" style="margin: 6px 0 0;">{{ p.structured_data.price_jod }} JOD</p>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">No products yet.</p>
+{% endif %}
+
+<div class="row" style="align-items: baseline;">
+  <h2 style="margin: 28px 0 10px;">Promotions</h2>
+  <a class="export-link" href="/businesses/{{ business.id }}/dashboard/catalog/promotions/new">+ Add promotion</a>
+</div>
+{% if promotions %}
+  {% for promo in promotions %}
+  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/catalog/promotions/{{ promo.id }}/edit">
+    <div class="card">
+      <div class="row">
+        <strong>{{ promo.structured_data.title }}</strong>
+        {% if promo.active_until and promo.active_until < now %}
+          <span class="badge closed">expired</span>
+        {% else %}
+          <span class="badge resolved">active</span>
+        {% endif %}
+      </div>
+      <p class="muted" style="margin: 6px 0 0;">{{ promo.structured_data.discount_text }} — until {{ promo.active_until.strftime("%Y-%m-%d %H:%M") if promo.active_until else "—" }}</p>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">No promotions yet.</p>
+{% endif %}
+{% endblock %}

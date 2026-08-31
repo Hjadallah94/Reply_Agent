@@ -9,7 +9,7 @@ vector match, so they get a real exact-match query instead.
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reply_agent.db.models import Customer, KnowledgeDocType, KnowledgeDocument, Order
@@ -72,6 +72,18 @@ async def retrieve_knowledge(state: GraphState) -> dict:
                     # them here lets self_check mistake example dialogue for real conversation
                     # history/stock data.
                     KnowledgeDocument.type != KnowledgeDocType.brand_voice,
+                    # Time-bound promotions (Doc 3 Phase 6.5) — active_from/active_until are
+                    # only ever set on type=promotion rows, NULL for everything else, so this
+                    # is safe to apply unconditionally rather than branching on type: an expired
+                    # promotion stops surfacing even if it's still semantically relevant.
+                    or_(
+                        KnowledgeDocument.active_from.is_(None),
+                        KnowledgeDocument.active_from <= func.now(),
+                    ),
+                    or_(
+                        KnowledgeDocument.active_until.is_(None),
+                        KnowledgeDocument.active_until >= func.now(),
+                    ),
                 )
                 .order_by(distance)
                 .limit(TOP_K)

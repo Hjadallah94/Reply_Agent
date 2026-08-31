@@ -9,12 +9,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +31,8 @@ from reply_agent.db.models import (
     Customer,
     Escalation,
     EscalationStatus,
+    KnowledgeDocType,
+    KnowledgeDocument,
     Message,
     MessageDirection,
     Order,
@@ -36,10 +40,22 @@ from reply_agent.db.models import (
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from reply_agent.graph.nodes.send_reply import send_reply
+from reply_agent.knowledge.catalog import (
+    create_product,
+    create_promotion,
+    update_product,
+    update_promotion,
+)
 from reply_agent.knowledge.corrections import record_owner_correction
+from reply_agent.knowledge.schema import Product, Promotion
+from reply_agent.knowledge.spreadsheet_ingest import parse_variants
 
 router = APIRouter(tags=["dashboard"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+# Same convention as graph/nodes/estimate_delivery.py — business-facing times in this project
+# are Amman-local, not UTC; the catalog forms' datetime-local inputs are entered in this zone.
+AMMAN_TZ = ZoneInfo("Asia/Amman")
 
 
 @router.get("/dashboard")
@@ -458,6 +474,282 @@ async def approve_approval(
         conversation.status = ConversationStatus.auto
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+def _document_or_404(
+    document: KnowledgeDocument | None, business_id: uuid.UUID, expected_type: KnowledgeDocType
+) -> KnowledgeDocument:
+    if document is None or document.business_id != business_id or document.type != expected_type:
+        raise HTTPException(status_code=404, detail="Not found")
+    return document
+
+
+def _parse_amman_datetime(value: str, *, field_name: str) -> datetime:
+    try:
+        naive = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}") from exc
+    return naive.replace(tzinfo=AMMAN_TZ)
+
+
+@router.get("/businesses/{business_id}/dashboard/catalog")
+async def catalog_list(request: Request, business: Business = Depends(require_business_access)):
+    async with tenant_session(business.id) as session:
+        products = (
+            await session.scalars(
+                select(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.business_id == business.id,
+                    KnowledgeDocument.type == KnowledgeDocType.product,
+                )
+                .order_by(KnowledgeDocument.structured_data["name"].astext)
+            )
+        ).all()
+
+        promotions = (
+            await session.scalars(
+                select(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.business_id == business.id,
+                    KnowledgeDocument.type == KnowledgeDocType.promotion,
+                )
+                .order_by(KnowledgeDocument.active_until.desc())
+            )
+        ).all()
+
+    now = datetime.now(UTC)
+    return templates.TemplateResponse(
+        request,
+        "catalog.html",
+        {
+            "business": business,
+            "products": products,
+            "promotions": promotions,
+            "now": now,
+        },
+    )
+
+
+@router.get("/businesses/{business_id}/dashboard/catalog/products/new")
+async def new_product_form(request: Request, business: Business = Depends(require_business_access)):
+    return templates.TemplateResponse(
+        request,
+        "product_form.html",
+        {"business": business, "document": None, "product": None, "variants_text": ""},
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/products/new")
+async def create_product_route(
+    name: str = Form(...),
+    description: str = Form(""),
+    price_jod: str = Form(...),
+    stock_status: str = Form("in_stock"),
+    variants: str = Form(""),
+    business: Business = Depends(require_business_access),
+):
+    try:
+        product = Product(
+            name=name.strip(),
+            description=description.strip(),
+            price_jod=float(price_jod),
+            stock_status=stock_status.strip() or "in_stock",
+            variants=parse_variants(variants),
+        )
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async with tenant_session(business.id) as session:
+        await create_product(session, business.id, product)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/catalog/products/{document_id}/edit")
+async def edit_product_form(
+    request: Request,
+    document_id: uuid.UUID,
+    business: Business = Depends(require_business_access),
+):
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id), business.id, KnowledgeDocType.product
+        )
+
+    variants_text = "; ".join(
+        f"{v['label']}:{v['stock_status']}" for v in document.structured_data.get("variants", [])
+    )
+    return templates.TemplateResponse(
+        request,
+        "product_form.html",
+        {
+            "business": business,
+            "document": document,
+            "product": document.structured_data,
+            "variants_text": variants_text,
+        },
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/products/{document_id}/edit")
+async def update_product_route(
+    document_id: uuid.UUID,
+    name: str = Form(...),
+    description: str = Form(""),
+    price_jod: str = Form(...),
+    stock_status: str = Form("in_stock"),
+    variants: str = Form(""),
+    business: Business = Depends(require_business_access),
+):
+    try:
+        product = Product(
+            name=name.strip(),
+            description=description.strip(),
+            price_jod=float(price_jod),
+            stock_status=stock_status.strip() or "in_stock",
+            variants=parse_variants(variants),
+        )
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id), business.id, KnowledgeDocType.product
+        )
+        await update_product(document, product)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/products/{document_id}/delete")
+async def delete_product_route(
+    document_id: uuid.UUID, business: Business = Depends(require_business_access)
+):
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id), business.id, KnowledgeDocType.product
+        )
+        await session.delete(document)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/catalog/promotions/new")
+async def new_promotion_form(
+    request: Request, business: Business = Depends(require_business_access)
+):
+    return templates.TemplateResponse(
+        request,
+        "promotion_form.html",
+        {"business": business, "document": None, "promotion": None},
+    )
+
+
+def _promotion_from_form(
+    title: str, description: str, discount_text: str, applies_to: str, starts_at: str, ends_at: str
+) -> Promotion:
+    try:
+        return Promotion(
+            title=title.strip(),
+            description=description.strip(),
+            discount_text=discount_text.strip(),
+            applies_to=applies_to.strip(),
+            starts_at=_parse_amman_datetime(starts_at, field_name="starts_at"),
+            ends_at=_parse_amman_datetime(ends_at, field_name="ends_at"),
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/promotions/new")
+async def create_promotion_route(
+    title: str = Form(...),
+    description: str = Form(""),
+    discount_text: str = Form(...),
+    applies_to: str = Form(""),
+    starts_at: str = Form(...),
+    ends_at: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    promotion = _promotion_from_form(
+        title, description, discount_text, applies_to, starts_at, ends_at
+    )
+
+    async with tenant_session(business.id) as session:
+        await create_promotion(session, business.id, promotion)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/catalog/promotions/{document_id}/edit")
+async def edit_promotion_form(
+    request: Request,
+    document_id: uuid.UUID,
+    business: Business = Depends(require_business_access),
+):
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id),
+            business.id,
+            KnowledgeDocType.promotion,
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "promotion_form.html",
+        {
+            "business": business,
+            "document": document,
+            "promotion": document.structured_data,
+            "starts_at_local": document.active_from.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
+            if document.active_from
+            else "",
+            "ends_at_local": document.active_until.astimezone(AMMAN_TZ).strftime("%Y-%m-%dT%H:%M")
+            if document.active_until
+            else "",
+        },
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/promotions/{document_id}/edit")
+async def update_promotion_route(
+    document_id: uuid.UUID,
+    title: str = Form(...),
+    description: str = Form(""),
+    discount_text: str = Form(...),
+    applies_to: str = Form(""),
+    starts_at: str = Form(...),
+    ends_at: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    promotion = _promotion_from_form(
+        title, description, discount_text, applies_to, starts_at, ends_at
+    )
+
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id),
+            business.id,
+            KnowledgeDocType.promotion,
+        )
+        await update_promotion(document, promotion)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/catalog/promotions/{document_id}/delete")
+async def delete_promotion_route(
+    document_id: uuid.UUID, business: Business = Depends(require_business_access)
+):
+    async with tenant_session(business.id) as session:
+        document = _document_or_404(
+            await session.get(KnowledgeDocument, document_id),
+            business.id,
+            KnowledgeDocType.promotion,
+        )
+        await session.delete(document)
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
 
 
 @router.post("/businesses/{business_id}/dashboard/approvals/{approval_id}/reject")
