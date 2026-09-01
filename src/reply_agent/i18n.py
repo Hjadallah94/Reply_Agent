@@ -186,6 +186,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "rules.custom_submit": {"en": "Submit for review", "ar": "إرسال للمراجعة"},
     "rules.custom_empty": {"en": "No custom rules yet.", "ar": "لا توجد قواعد مخصصة بعد."},
+    # --- conversations (Doc 3 roadmap, partner meeting 2026-09-01: full conversation view) ---
+    "conversations.view_all": {"en": "View all", "ar": "عرض الكل"},
+    "conversations.heading": {"en": "All conversations", "ar": "كل المحادثات"},
+    "conversations.empty": {"en": "No conversations yet.", "ar": "لا توجد محادثات بعد."},
+    "conversations.prev_page": {"en": "Previous", "ar": "السابق"},
+    "conversations.next_page": {"en": "Next", "ar": "التالي"},
+    "conversations.page_label": {"en": "Page", "ar": "صفحة"},
+    "conversations.send_label": {
+        "en": "Send a message to this customer",
+        "ar": "أرسل رسالة لهذا الزبون",
+    },
+    "conversations.send_button": {"en": "Send", "ar": "إرسال"},
+    "conversations.pending_elsewhere_escalation": {
+        "en": "This conversation has an escalation waiting on your reply —",
+        "ar": "هاي المحادثة فيها تصعيد بينتظر ردك —",
+    },
+    "conversations.pending_elsewhere_approval": {
+        "en": "This conversation has an order waiting on your approval —",
+        "ar": "هاي المحادثة فيها طلب بينتظر موافقتك —",
+    },
+    "conversations.pending_elsewhere_link": {
+        "en": "resolve it there",
+        "ar": "عالجها من هناك",
+    },
     # --- status/badge values (real enums + conventional stock_status values) ---
     "status.auto": {"en": "Auto", "ar": "تلقائي"},
     "status.owner_handled": {"en": "Owner handled", "ar": "بمعالجة المالك"},

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ customer_handle }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard/conversations">&larr; {{ t('conversations.heading') }}</a>
+<h1>{{ customer_handle }} <span class="muted">({{ channel }})</span></h1>
+
+{% if pending_escalation_id %}
+<div class="reason">
+  {{ t('conversations.pending_elsewhere_escalation') }}
+  <a href="/businesses/{{ business.id }}/dashboard/escalations/{{ pending_escalation_id }}">{{ t('conversations.pending_elsewhere_link') }}</a>
+</div>
+{% elif pending_approval_id %}
+<div class="reason">
+  {{ t('conversations.pending_elsewhere_approval') }}
+  <a href="/businesses/{{ business.id }}/dashboard/approvals/{{ pending_approval_id }}">{{ t('conversations.pending_elsewhere_link') }}</a>
+</div>
+{% endif %}
+
+<div class="thread">
+  {% for m in messages %}
+  <div class="bubble {{ 'customer' if m.direction == 'inbound' else 'agent' }}">
+    {{ m.text }}
+    <span class="meta">{{ m.created_at }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="/businesses/{{ business.id }}/dashboard/conversations/{{ conversation.id }}/send">
+  <label for="reply_text" class="muted" style="display: block; margin: 0 0 8px; font-size: 13.5px;">{{ t('conversations.send_label') }}</label>
+  <textarea name="reply_text" id="reply_text" required></textarea>
+  <button type="submit">{{ t('conversations.send_button') }}</button>
+</form>
+{% endblock %}

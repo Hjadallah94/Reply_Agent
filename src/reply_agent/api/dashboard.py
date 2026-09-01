@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from reply_agent.auth.dependencies import (
@@ -263,6 +263,7 @@ async def business_dashboard(
 
         conversation_rows = [
             {
+                "id": c.id,
                 "customer_handle": c.customer.channel_handle,
                 "status": c.status.value,
                 "last_message_text": c.messages[-1].text if c.messages else None,
@@ -295,6 +296,154 @@ async def set_away_mode(
         db_business.away_message = away_message.strip() or None
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+CONVERSATIONS_PAGE_SIZE = 50
+
+
+@router.get("/businesses/{business_id}/dashboard/conversations")
+async def conversations_list(
+    request: Request,
+    page: int = 1,
+    business: Business = Depends(require_business_access),
+):
+    # Doc 3 roadmap (partner meeting 2026-09-01): the dashboard's own "Recent conversations"
+    # section (business_dashboard above) is a fixed top-30 preview — this is the actual
+    # "see all the interactions that happened" surface the meeting note asked for.
+    page = max(1, page)
+    async with tenant_session(business.id) as session:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(Conversation)
+            .where(Conversation.business_id == business.id)
+        )
+        conversations = (
+            await session.scalars(
+                select(Conversation)
+                .where(Conversation.business_id == business.id)
+                .options(selectinload(Conversation.customer), selectinload(Conversation.messages))
+                .order_by(Conversation.updated_at.desc())
+                .limit(CONVERSATIONS_PAGE_SIZE)
+                .offset((page - 1) * CONVERSATIONS_PAGE_SIZE)
+            )
+        ).all()
+
+    conversation_rows = [
+        {
+            "id": c.id,
+            "customer_handle": c.customer.channel_handle,
+            "channel": c.channel.value,
+            "status": c.status.value,
+            "last_message_text": c.messages[-1].text if c.messages else None,
+        }
+        for c in conversations
+    ]
+    total_pages = max(1, -(-(total or 0) // CONVERSATIONS_PAGE_SIZE))
+    return _render(
+        request,
+        "conversations_list.html",
+        business=business,
+        conversations=conversation_rows,
+        page=page,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/businesses/{business_id}/dashboard/conversations/{conversation_id}")
+async def conversation_detail(
+    request: Request,
+    conversation_id: uuid.UUID,
+    business: Business = Depends(require_business_access),
+):
+    async with tenant_session(business.id) as session:
+        conversation = await session.scalar(
+            select(Conversation)
+            .where(Conversation.id == conversation_id)
+            .options(selectinload(Conversation.customer), selectinload(Conversation.messages))
+        )
+        if conversation is None or conversation.business_id != business.id:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # A pending Escalation/ApprovalRequest already has its own dedicated resolve/approve
+        # flow (with correction-tracking and adaptive-autonomy bookkeeping this general send
+        # form doesn't do) — point there instead of inviting a parallel free-form reply that
+        # would leave that row stuck "pending" forever.
+        pending_escalation = await session.scalar(
+            select(Escalation).where(
+                Escalation.conversation_id == conversation.id,
+                Escalation.status == EscalationStatus.pending,
+            )
+        )
+        pending_approval = await session.scalar(
+            select(ApprovalRequest).where(
+                ApprovalRequest.conversation_id == conversation.id,
+                ApprovalRequest.status == ApprovalRequestStatus.pending,
+            )
+        )
+
+        messages = [
+            {
+                "direction": m.direction.value,
+                "text": m.text,
+                "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
+            }
+            for m in conversation.messages
+        ]
+
+    return _render(
+        request,
+        "conversation.html",
+        business=business,
+        conversation=conversation,
+        customer_handle=conversation.customer.channel_handle,
+        channel=conversation.channel.value,
+        messages=messages,
+        pending_escalation_id=pending_escalation.id if pending_escalation else None,
+        pending_approval_id=pending_approval.id if pending_approval else None,
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/conversations/{conversation_id}/send")
+async def send_conversation_message(
+    conversation_id: uuid.UUID,
+    reply_text: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    # Same CRLF-normalization fix as resolve_escalation below — a <textarea> submission always
+    # normalizes line breaks to \r\n regardless of what was typed.
+    reply_text = reply_text.strip().replace("\r\n", "\n")
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Reply text is required")
+
+    async with tenant_session(business.id) as session:
+        conversation = await session.get(Conversation, conversation_id)
+        if conversation is None or conversation.business_id != business.id:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # Reuses the same channel-dispatch code a real auto-send would go through, rather than
+        # duplicating the WhatsApp/Instagram/Messenger match statement here.
+        await send_reply(
+            {
+                "channel": conversation.channel.value,
+                "business_id": str(conversation.business_id),
+                "thread_id": conversation.thread_id,
+                "draft_reply": {"text": reply_text},
+            }
+        )
+
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.outbound,
+                text=reply_text,
+                model_used="owner",
+            )
+        )
+
+    return RedirectResponse(
+        url=f"/businesses/{business.id}/dashboard/conversations/{conversation_id}",
+        status_code=303,
+    )
 
 
 @router.get("/businesses/{business_id}/dashboard/rules")

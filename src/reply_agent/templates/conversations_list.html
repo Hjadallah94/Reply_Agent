@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ t('conversations.heading') }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ t('conversations.heading') }}</h1>
+
+{% if conversations %}
+  {% for c in conversations %}
+  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/conversations/{{ c.id }}">
+    <div class="card row">
+      <div>
+        <strong>{{ c.customer_handle }}</strong>
+        <p class="muted" style="margin: 4px 0 0;">{{ c.last_message_text or "—" }}</p>
+      </div>
+      <span class="badge {{ c.status }}">{{ t_status(c.status) }}</span>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <p class="empty">{{ t('conversations.empty') }}</p>
+{% endif %}
+
+<div class="row" style="margin-top: 20px;">
+  {% if page > 1 %}
+    <a class="export-link" href="?page={{ page - 1 }}">&larr; {{ t('conversations.prev_page') }}</a>
+  {% else %}
+    <span></span>
+  {% endif %}
+  <span class="muted">{{ t('conversations.page_label') }} {{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a class="export-link" href="?page={{ page + 1 }}">{{ t('conversations.next_page') }} &rarr;</a>
+  {% else %}
+    <span></span>
+  {% endif %}
+</div>
+{% endblock %}
