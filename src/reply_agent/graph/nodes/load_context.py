@@ -19,6 +19,10 @@ async def load_context(state: GraphState) -> dict:
         if conversation is None:
             raise ValueError(f"No conversation for thread_id={state['thread_id']!r}")
 
+        # Fetched unconditionally (not just for metering below) — is_away needs to reach state
+        # on every run, not only a genuinely-new message (routers.py's is_away_router reads it).
+        business = await session.get(Business, conversation.business_id)
+
         # Query prior turns BEFORE inserting the current message — conversation_history must
         # exclude the message this run is currently processing (classify_intent/generate_response
         # append state["message"]["text"] separately; inserting first would duplicate it).
@@ -46,7 +50,6 @@ async def load_context(state: GraphState) -> dict:
         # Only meter genuinely new messages (Doc 5 Section 2 caps) — a redelivered webhook for
         # one already counted must not be charged twice.
         if insert_result.rowcount:
-            business = await session.get(Business, conversation.business_id)
             await record_customer_message(session, business)
 
         prior_escalation_count = await session.scalar(
@@ -71,4 +74,5 @@ async def load_context(state: GraphState) -> dict:
             "preferences": {},
             "prior_escalations": prior_escalation_count or 0,
         },
+        "business_is_away": business.is_away,
     }

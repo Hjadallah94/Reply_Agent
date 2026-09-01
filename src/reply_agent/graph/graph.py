@@ -1,11 +1,13 @@
 """Builds the LangGraph pipeline (Doc 2, Section 3.1, as corrected — see routers.py):
 
-ingest_message -> load_context -> classify_intent -> estimate_delivery -> retrieve_knowledge
-    -> generate_response -> self_check -> [confidence router]
-        --send----> send_reply -> update_memory -> END
-        --retry---> (loop back to retrieve_knowledge)
-        --escalate-> escalate_to_owner -> update_memory -> END
-        --approve-> request_owner_approval -> update_memory -> END
+ingest_message -> load_context -> [away router]
+    --away-----> send_away_reply -> update_memory -> END
+    --continue-> classify_intent -> estimate_delivery -> retrieve_knowledge
+        -> generate_response -> self_check -> [confidence router]
+            --send----> send_reply -> update_memory -> END
+            --retry---> (loop back to retrieve_knowledge)
+            --escalate-> escalate_to_owner -> update_memory -> END
+            --approve-> request_owner_approval -> update_memory -> END
 
 Every message is drafted before the confidence router decides send vs. escalate — the risk
 gate (Doc 2 Section 2.4) never skips retrieve_knowledge/generate_response, it only prevents
@@ -19,6 +21,12 @@ point (self_check).
 request_owner_approval (Doc 2 Section 9.2) is a fourth branch off that same fan-out point,
 alongside send/retry/escalate — a same-day delivery commitment that IS well-grounded (unlike
 escalation) but still needs the owner's sign-off before it reaches the customer.
+
+is_away_router (Doc 3 roadmap, "I'm not available today") is the graph's *second* fan-out
+point, deliberately breaking the "every node runs unconditionally" pattern above: while a
+business is away, every message gets the same away-reply, so there's nothing useful for
+classification/retrieval/generation/self-check to do — skipping them outright, rather than
+having each one no-op internally, is a real cost saving, not just simpler code.
 """
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -33,9 +41,10 @@ from reply_agent.graph.nodes.load_context import load_context
 from reply_agent.graph.nodes.request_owner_approval import request_owner_approval
 from reply_agent.graph.nodes.retrieve_knowledge import retrieve_knowledge
 from reply_agent.graph.nodes.self_check import self_check
+from reply_agent.graph.nodes.send_away_reply import send_away_reply
 from reply_agent.graph.nodes.send_reply import send_reply
 from reply_agent.graph.nodes.update_memory import update_memory
-from reply_agent.graph.routers import confidence_router
+from reply_agent.graph.routers import confidence_router, is_away_router
 from reply_agent.graph.state import GraphState
 from reply_agent.memory.checkpointer import checkpointer_conn_string
 
@@ -51,13 +60,20 @@ def build_graph(checkpointer) -> StateGraph:
     builder.add_node("generate_response", generate_response)
     builder.add_node("self_check", self_check)
     builder.add_node("send_reply", send_reply)
+    builder.add_node("send_away_reply", send_away_reply)
     builder.add_node("escalate_to_owner", escalate_to_owner)
     builder.add_node("request_owner_approval", request_owner_approval)
     builder.add_node("update_memory", update_memory)
 
     builder.add_edge(START, "ingest_message")
     builder.add_edge("ingest_message", "load_context")
-    builder.add_edge("load_context", "classify_intent")
+
+    builder.add_conditional_edges(
+        "load_context",
+        is_away_router,
+        {"away": "send_away_reply", "continue": "classify_intent"},
+    )
+
     builder.add_edge("classify_intent", "estimate_delivery")
     builder.add_edge("estimate_delivery", "retrieve_knowledge")
     builder.add_edge("retrieve_knowledge", "generate_response")
@@ -75,6 +91,7 @@ def build_graph(checkpointer) -> StateGraph:
     )
 
     builder.add_edge("send_reply", "update_memory")
+    builder.add_edge("send_away_reply", "update_memory")
     builder.add_edge("escalate_to_owner", "update_memory")
     builder.add_edge("request_owner_approval", "update_memory")
     builder.add_edge("update_memory", END)

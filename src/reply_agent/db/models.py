@@ -109,6 +109,11 @@ class Business(Base):
     # Shape: {"cutoff_hour": 15, "min_lead_hours": 6} (Doc 2 Section 9.3). Owner-editable UI
     # is Phase 6e+; for now this is seeded directly per business, same as escalation_rules.
     delivery_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # "I'm not available today" (Doc 3 roadmap, partner meeting 2026-09-01) — while true, every
+    # incoming message gets away_message (or a translated default) instead of the normal
+    # pipeline; see graph/routers.py's is_away_router and graph/nodes/send_away_reply.py.
+    is_away: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    away_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

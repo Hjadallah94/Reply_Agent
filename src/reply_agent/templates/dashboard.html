@@ -21,6 +21,21 @@
 </div>
 
 <div class="card">
+  <form method="post" action="/businesses/{{ business.id }}/away-mode">
+    <div class="row">
+      <strong>{{ t('dashboard.away_heading') }}</strong>
+      <span class="badge {{ 'pending' if business.is_away else 'resolved' }}">{{ t('dashboard.away_status_away') if business.is_away else t('dashboard.away_status_active') }}</span>
+    </div>
+    <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 13.5px; color: var(--text-muted);">
+      <input type="checkbox" name="is_away" value="true" {% if business.is_away %}checked{% endif %}>
+      {{ t('dashboard.away_checkbox_label') }}
+    </label>
+    <textarea name="away_message" placeholder="{{ t('dashboard.away_message_placeholder') }}" style="min-height: 60px;">{{ business.away_message or '' }}</textarea>
+    <button type="submit">{{ t('dashboard.away_save') }}</button>
+  </form>
+</div>
+
+<div class="card">
   <div class="row">
     <strong>{{ t('dashboard.usage_heading') }}</strong>
     {% if usage.over_cap %}<span class="badge pending">{{ t('dashboard.over_cap') }}</span>{% endif %}

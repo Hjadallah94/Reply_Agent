@@ -92,11 +92,15 @@ class GraphState(TypedDict):
     conversation_history: list[ConversationTurn]
     customer_profile: CustomerProfile
 
+    # "I'm not available today" (Doc 3 roadmap) — set unconditionally by load_context.py, read
+    # by graph/routers.py's is_away_router (pure, no DB call of its own).
+    business_is_away: NotRequired[bool]
+
     intent: NotRequired[Intent]
     retrieved_context: NotRequired[list[RetrievedChunk]]
     draft_reply: NotRequired[DraftReply]
     self_check: NotRequired[SelfCheckResult]
-    route: NotRequired[Literal["send", "escalate", "retry", "approve"]]
+    route: NotRequired[Literal["send", "escalate", "retry", "approve", "away"]]
     escalation: NotRequired[EscalationRecord | None]
     delivery_estimate: NotRequired[DeliveryEstimate | None]
     approval: NotRequired[ApprovalRecord | None]

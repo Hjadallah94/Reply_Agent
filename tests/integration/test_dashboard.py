@@ -332,6 +332,57 @@ async def test_push_unsubscribe_404s_for_unowned_business(client, escalation):
     assert response.status_code == 404
 
 
+# --- "I'm not available today" (Doc 3 roadmap) --------------------------------------------
+
+
+async def test_away_mode_turns_on_with_custom_message(client, escalation):
+    business, _ = escalation
+    response = client.post(
+        f"/businesses/{business.id}/away-mode",
+        data={"is_away": "true", "away_message": "Closed today, back tomorrow!"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.is_away is True
+        assert refreshed.away_message == "Closed today, back tomorrow!"
+
+
+async def test_away_mode_turns_off_and_clears_blank_message(client, escalation):
+    business, _ = escalation
+    client.post(
+        f"/businesses/{business.id}/away-mode",
+        data={"is_away": "true", "away_message": "Closed today"},
+        follow_redirects=False,
+    )
+    await dispose_engines()
+
+    response = client.post(
+        f"/businesses/{business.id}/away-mode",
+        data={"away_message": "   "},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.is_away is False
+        assert refreshed.away_message is None
+
+
+async def test_away_mode_404s_for_unowned_business(client, escalation):
+    response = client.post(
+        "/businesses/00000000-0000-0000-0000-000000000000/away-mode",
+        data={"is_away": "true"},
+    )
+    assert response.status_code == 404
+
+
 async def test_business_dashboard_lists_the_escalation(client, escalation):
     business, esc = escalation
     response = client.get(f"/businesses/{business.id}/dashboard")

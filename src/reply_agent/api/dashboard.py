@@ -276,6 +276,21 @@ async def business_dashboard(
     )
 
 
+@router.post("/businesses/{business_id}/away-mode")
+async def set_away_mode(
+    business_id: uuid.UUID,
+    is_away: bool = Form(False),
+    away_message: str = Form(""),
+    business: Business = Depends(require_business_access),
+):
+    async with tenant_session(business_id) as session:
+        db_business = await session.get(Business, business_id)
+        db_business.is_away = is_away
+        db_business.away_message = away_message.strip() or None
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
 @router.get("/businesses/{business_id}/dashboard/export")
 async def export_conversations(business: Business = Depends(require_business_access)):
     async with tenant_session(business.id) as session:

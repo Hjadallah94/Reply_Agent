@@ -2,6 +2,7 @@ from reply_agent.graph.routers import (
     MAX_RETRIEVAL_ATTEMPTS,
     blocks_auto_send,
     confidence_router,
+    is_away_router,
     needs_owner_approval,
 )
 
@@ -176,3 +177,15 @@ def test_confidence_router_sends_next_day_deferral_unchanged():
         },
     }
     assert confidence_router(state) == "send"
+
+
+def test_is_away_router_routes_away_when_business_is_away():
+    assert is_away_router({"business_is_away": True}) == "away"
+
+
+def test_is_away_router_routes_continue_when_not_away():
+    assert is_away_router({"business_is_away": False}) == "continue"
+
+
+def test_is_away_router_defaults_to_continue_when_field_missing():
+    assert is_away_router({}) == "continue"

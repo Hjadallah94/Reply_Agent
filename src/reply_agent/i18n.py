@@ -25,6 +25,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "dashboard.connect_messenger": {"en": "Connect Facebook Page", "ar": "ربط صفحة فيسبوك"},
     "dashboard.instagram_connected": {"en": "Instagram connected", "ar": "إنستغرام متصل"},
     "dashboard.manage_catalog": {"en": "Manage catalog", "ar": "إدارة الكتالوج"},
+    "dashboard.away_heading": {"en": "Availability", "ar": "التوفر"},
+    "dashboard.away_status_away": {"en": "Away today", "ar": "غير متاح اليوم"},
+    "dashboard.away_status_active": {"en": "Replying normally", "ar": "الرد يعمل بشكل طبيعي"},
+    "dashboard.away_checkbox_label": {
+        "en": "I'm not available today — auto-reply to everyone instead",
+        "ar": "غير متاح اليوم — رد تلقائي على الجميع بدلاً من ذلك",
+    },
+    "dashboard.away_message_placeholder": {
+        "en": "Optional custom message (leave blank for the default)",
+        "ar": "رسالة مخصصة اختيارية (اتركها فارغة لاستخدام الرسالة الافتراضية)",
+    },
+    "dashboard.away_save": {"en": "Save", "ar": "حفظ"},
     "dashboard.usage_heading": {"en": "Usage this period", "ar": "الاستخدام لهذه الفترة"},
     "dashboard.over_cap": {"en": "Over cap", "ar": "تجاوز الحد"},
     "dashboard.messages_suffix": {"en": "messages", "ar": "رسالة"},
