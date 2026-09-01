@@ -69,6 +69,24 @@ class Settings(BaseSettings):
 
     owner_notification_whatsapp_number: str = ""
 
+    # This deployment's own public URL (e.g. https://reply-agent-web-staging.onrender.com), no
+    # trailing slash — only used to build a push notification's click-through link
+    # (notifications/push.py). The existing WhatsApp ping deliberately omits a link (the owner
+    # navigates there themselves); a native push notification is exactly the case where a
+    # deep link is the whole point, so this is new, not an oversight in the WhatsApp path.
+    # Left empty, the notification just omits the link rather than sending a broken one.
+    app_base_url: str = ""
+
+    # Web Push (Doc 3 Phase 6.6, notifications/push.py) — scripts/generate_vapid_keys.py makes
+    # a keypair once per environment. vapid_public_key is also handed to the browser (injected
+    # into every dashboard template via api/dashboard.py's _render()) for
+    # PushManager.subscribe({applicationServerKey: ...}); left empty, the "Enable
+    # notifications" button in base.html never renders — same graceful-when-unconfigured
+    # convention as owner_notification_whatsapp_number above.
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = ""
+
     # When true, every channel's send function logs instead of calling the real Graph API —
     # used by the eval harness and local dev before real Meta credentials exist.
     meta_dry_run: bool = False

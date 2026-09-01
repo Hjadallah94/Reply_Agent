@@ -29,6 +29,7 @@ from reply_agent.db.models import (
     Message,
     MessageDirection,
     Order,
+    PushSubscription,
 )
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
@@ -224,6 +225,111 @@ async def test_set_language_guards_against_open_redirect(client, escalation):
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/dashboard"
+
+
+# --- Web Push (Doc 3 Phase 6.6) -------------------------------------------------------------
+
+
+async def test_push_subscribe_creates_a_row(client, escalation):
+    business, _ = escalation
+    response = client.post(
+        "/push-subscribe",
+        json={
+            "business_id": str(business.id),
+            "endpoint": "https://push.example.com/new-sub",
+            "keys": {"p256dh": "abc", "auth": "def"},
+        },
+    )
+    assert response.status_code == 200
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        sub = await session.scalar(
+            select(PushSubscription).where(
+                PushSubscription.endpoint == "https://push.example.com/new-sub"
+            )
+        )
+        assert sub is not None
+        assert sub.business_id == business.id
+        assert sub.p256dh_key == "abc"
+        assert sub.auth_key == "def"
+
+
+async def test_push_subscribe_is_idempotent_on_endpoint(client, escalation):
+    business, _ = escalation
+    payload = {
+        "business_id": str(business.id),
+        "endpoint": "https://push.example.com/dup",
+        "keys": {"p256dh": "abc", "auth": "def"},
+    }
+    client.post("/push-subscribe", json=payload)
+    await dispose_engines()
+
+    payload["keys"] = {"p256dh": "updated", "auth": "def"}
+    client.post("/push-subscribe", json=payload)
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        rows = (
+            await session.scalars(
+                select(PushSubscription).where(
+                    PushSubscription.endpoint == "https://push.example.com/dup"
+                )
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].p256dh_key == "updated"
+
+
+async def test_push_subscribe_404s_for_unowned_business(client, escalation):
+    response = client.post(
+        "/push-subscribe",
+        json={
+            "business_id": "00000000-0000-0000-0000-000000000000",
+            "endpoint": "https://push.example.com/x",
+            "keys": {"p256dh": "abc", "auth": "def"},
+        },
+    )
+    assert response.status_code == 404
+
+
+async def test_push_unsubscribe_removes_a_row(client, escalation):
+    business, _ = escalation
+    client.post(
+        "/push-subscribe",
+        json={
+            "business_id": str(business.id),
+            "endpoint": "https://push.example.com/to-remove",
+            "keys": {"p256dh": "abc", "auth": "def"},
+        },
+    )
+    await dispose_engines()
+
+    response = client.post(
+        "/push-unsubscribe",
+        json={"business_id": str(business.id), "endpoint": "https://push.example.com/to-remove"},
+    )
+    assert response.status_code == 200
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        sub = await session.scalar(
+            select(PushSubscription).where(
+                PushSubscription.endpoint == "https://push.example.com/to-remove"
+            )
+        )
+        assert sub is None
+
+
+async def test_push_unsubscribe_404s_for_unowned_business(client, escalation):
+    response = client.post(
+        "/push-unsubscribe",
+        json={
+            "business_id": "00000000-0000-0000-0000-000000000000",
+            "endpoint": "https://push.example.com/x",
+        },
+    )
+    assert response.status_code == 404
 
 
 async def test_business_dashboard_lists_the_escalation(client, escalation):
@@ -583,9 +689,7 @@ async def test_approve_unchanged_records_no_correction(client, approval):
         assert refreshed.sent_unchanged is True
 
 
-async def test_approve_unchanged_with_crlf_line_endings_still_counts_as_unchanged(
-    client, approval
-):
+async def test_approve_unchanged_with_crlf_line_endings_still_counts_as_unchanged(client, approval):
     """A <textarea> form submission always normalizes line breaks to \\r\\n per the HTML spec,
     but drafted_reply (the LLM's own output) uses plain \\n — a real bug found live during
     Phase 6d verification: an unedited approval submitted through an actual browser was

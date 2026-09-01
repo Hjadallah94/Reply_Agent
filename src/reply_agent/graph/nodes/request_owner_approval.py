@@ -33,6 +33,7 @@ from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.context_resolution import get_whatsapp_phone_number_id
 from reply_agent.graph.nodes.send_reply import send_reply
 from reply_agent.graph.state import GraphState
+from reply_agent.notifications.push import send_push_to_business
 
 DEFAULT_AUTO_APPROVE_THRESHOLD = 3
 AUTO_APPROVAL_RESOLVED_BY = "system (adaptive autonomy)"
@@ -126,11 +127,12 @@ async def request_owner_approval(state: GraphState) -> dict:
                 )
             )
         else:
+            approval_id = uuid.uuid4()
             conversation.status = ConversationStatus.owner_handled
 
             session.add(
                 ApprovalRequest(
-                    id=uuid.uuid4(),
+                    id=approval_id,
                     conversation_id=conversation.id,
                     drafted_reply=draft_text,
                     reasoning=delivery_estimate["reasoning"],
@@ -155,6 +157,22 @@ async def request_owner_approval(state: GraphState) -> dict:
                     text=owner_message,
                     phone_number_id=phone_number_id,
                 )
+
+            # Supplements, never replaces, the WhatsApp ping above — unlike it, this does carry
+            # a deep link, since that's the whole point of a native push notification.
+            push_url = (
+                f"{settings.app_base_url}/businesses/{business_id}/dashboard/approvals/"
+                f"{approval_id}"
+                if settings.app_base_url
+                else ""
+            )
+            await send_push_to_business(
+                session,
+                business_id,
+                title="New order needs your approval",
+                body=f"{estimated_window} delivery — {state['message']['text'][:120]}",
+                url=push_url,
+            )
 
     return {
         "route": "approve",

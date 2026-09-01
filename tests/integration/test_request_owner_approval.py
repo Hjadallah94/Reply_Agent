@@ -196,6 +196,34 @@ async def test_no_notification_when_owner_number_not_configured(business, conver
     mock_send.assert_not_called()
 
 
+async def test_push_notification_sent_alongside_whatsapp_ping_when_pending(business, conversation):
+    """Web Push (Doc 3 Phase 6.6) supplements, never replaces, the existing WhatsApp ping —
+    both fire for a pending (not auto-approved) request.
+    """
+    state = _state(business.id, conversation.thread_id)
+
+    with (
+        patch("reply_agent.graph.nodes.request_owner_approval.send_text_message", new=AsyncMock()),
+        patch(
+            "reply_agent.graph.nodes.request_owner_approval.send_push_to_business",
+            new=AsyncMock(),
+        ) as mock_push,
+        patch("reply_agent.graph.nodes.request_owner_approval.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.owner_notification_whatsapp_number = "962790009999"
+        mock_settings.return_value.app_base_url = "https://staging.example.com"
+        await request_owner_approval(state)
+
+    mock_push.assert_called_once()
+    call_args = mock_push.call_args
+    assert call_args.args[1] == business.id
+    assert call_args.kwargs["title"]
+    assert "3-4 hours" in call_args.kwargs["body"]
+    assert call_args.kwargs["url"].startswith(
+        f"https://staging.example.com/businesses/{business.id}/dashboard/approvals/"
+    )
+
+
 # --- Adaptive autonomy (Doc 2 Section 9.4) -----------------------------------------------
 
 

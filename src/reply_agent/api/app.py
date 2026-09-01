@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from reply_agent.api.auth import router as auth_router
@@ -36,3 +38,14 @@ async def root() -> RedirectResponse:
     # /dashboard already does the right thing either way — a business's own dashboard if
     # logged in, /login if not — so the bare domain root shouldn't be a bare 404.
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+@app.get("/sw.js")
+async def service_worker() -> FileResponse:
+    # Served from the root, not /static/sw.js — a service worker's default scope is limited to
+    # the path it's served from, and this needs to cover the whole dashboard (Doc 3 Phase 6.6,
+    # notifications/push.py's push notifications).
+    return FileResponse(_STATIC_DIR / "sw.js", media_type="application/javascript")

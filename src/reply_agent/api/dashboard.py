@@ -17,12 +17,17 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from reply_agent.auth.dependencies import get_current_user, require_business_access
+from reply_agent.auth.dependencies import (
+    ensure_business_access,
+    get_current_user,
+    require_business_access,
+)
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
+from reply_agent.config import get_settings
 from reply_agent.db.models import (
     ApprovalRequest,
     ApprovalRequestStatus,
@@ -37,6 +42,7 @@ from reply_agent.db.models import (
     Message,
     MessageDirection,
     Order,
+    PushSubscription,
 )
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
@@ -70,7 +76,70 @@ def _render(request: Request, name: str, **context):
     context.setdefault("t", partial(t, lang))
     context.setdefault("t_status", partial(t_status, lang))
     context.setdefault("amman_tz", AMMAN_TZ)
+    context.setdefault("vapid_public_key", get_settings().vapid_public_key)
     return templates.TemplateResponse(request, name, context)
+
+
+class _PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class _PushSubscribePayload(BaseModel):
+    business_id: uuid.UUID
+    endpoint: str
+    keys: _PushSubscriptionKeys
+
+
+class _PushUnsubscribePayload(BaseModel):
+    business_id: uuid.UUID
+    endpoint: str
+
+
+@router.post("/push-subscribe")
+async def push_subscribe(request: Request, payload: _PushSubscribePayload) -> dict:
+    await ensure_business_access(request, payload.business_id)
+    user = await get_current_user(request)
+
+    async with tenant_session(payload.business_id) as session:
+        # Upsert on endpoint, not a duplicate — the same browser re-subscribing (e.g. after
+        # clearing site data then re-granting permission) naturally reuses or gets issued a
+        # fresh endpoint from the push service; either way this keeps exactly one row per
+        # endpoint rather than accumulating dead duplicates.
+        existing = await session.scalar(
+            select(PushSubscription).where(PushSubscription.endpoint == payload.endpoint)
+        )
+        if existing is not None:
+            existing.business_id = payload.business_id
+            existing.user_id = user.id
+            existing.p256dh_key = payload.keys.p256dh
+            existing.auth_key = payload.keys.auth
+        else:
+            session.add(
+                PushSubscription(
+                    business_id=payload.business_id,
+                    user_id=user.id,
+                    endpoint=payload.endpoint,
+                    p256dh_key=payload.keys.p256dh,
+                    auth_key=payload.keys.auth,
+                )
+            )
+
+    return {"status": "ok"}
+
+
+@router.post("/push-unsubscribe")
+async def push_unsubscribe(request: Request, payload: _PushUnsubscribePayload) -> dict:
+    await ensure_business_access(request, payload.business_id)
+
+    async with tenant_session(payload.business_id) as session:
+        existing = await session.scalar(
+            select(PushSubscription).where(PushSubscription.endpoint == payload.endpoint)
+        )
+        if existing is not None:
+            await session.delete(existing)
+
+    return {"status": "ok"}
 
 
 @router.get("/dashboard")

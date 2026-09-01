@@ -17,6 +17,7 @@ from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.context_resolution import get_whatsapp_phone_number_id
 from reply_agent.graph.risk_rules import blocking_reason, order_context_found
 from reply_agent.graph.state import GraphState
+from reply_agent.notifications.push import send_push_to_business
 
 
 def _escalation_reason(state: GraphState) -> str:
@@ -47,7 +48,10 @@ async def escalate_to_owner(state: GraphState) -> dict:
 
     settings = get_settings()
 
-    async with tenant_session(uuid.UUID(state["business_id"])) as session:
+    business_id = uuid.UUID(state["business_id"])
+    escalation_id = uuid.uuid4()
+
+    async with tenant_session(business_id) as session:
         conversation = await session.scalar(
             select(Conversation).where(Conversation.thread_id == state["thread_id"])
         )
@@ -55,7 +59,7 @@ async def escalate_to_owner(state: GraphState) -> dict:
 
         session.add(
             Escalation(
-                id=uuid.uuid4(),
+                id=escalation_id,
                 conversation_id=conversation.id,
                 reason=reason,
                 drafted_reply=draft_text or None,
@@ -66,9 +70,7 @@ async def escalate_to_owner(state: GraphState) -> dict:
         if settings.owner_notification_whatsapp_number:
             # Notify from the same business's own number, not a global default (Doc 3 Phase 4:
             # self-serve means many onboarded businesses, each with their own connected number).
-            phone_number_id = await get_whatsapp_phone_number_id(
-                session, uuid.UUID(state["business_id"])
-            )
+            phone_number_id = await get_whatsapp_phone_number_id(session, business_id)
             owner_message = (
                 f"New escalation ({reason}).\n"
                 f"Customer said: {state['message']['text']}\n\n"
@@ -79,6 +81,23 @@ async def escalate_to_owner(state: GraphState) -> dict:
                 text=owner_message,
                 phone_number_id=phone_number_id,
             )
+
+        # Supplements, never replaces, the WhatsApp ping above — entirely inert if no device
+        # has subscribed (or VAPID isn't configured), same as the WhatsApp branch being a no-op
+        # when unconfigured.
+        push_url = (
+            f"{settings.app_base_url}/businesses/{business_id}/dashboard/escalations/"
+            f"{escalation_id}"
+            if settings.app_base_url
+            else ""
+        )
+        await send_push_to_business(
+            session,
+            business_id,
+            title="New escalation",
+            body=state["message"]["text"][:150],
+            url=push_url,
+        )
 
     return {
         "route": "escalate",

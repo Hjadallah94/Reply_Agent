@@ -162,7 +162,7 @@
   }
   .auth-form .switch { font-size: 13.5px; color: var(--text-muted); text-align: center; }
   .header-actions { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
-  .logout-form button, .lang-form button {
+  .logout-form button, .lang-form button, .push-btn {
     margin-top: 0;
     background: none;
     color: var(--text-muted);
@@ -170,8 +170,11 @@
     padding: 5px 10px;
     font-size: 13px;
     font-weight: 500;
+    border-radius: 8px;
+    font-family: inherit;
+    cursor: pointer;
   }
-  .logout-form button:hover, .lang-form button:hover {
+  .logout-form button:hover, .lang-form button:hover, .push-btn:hover {
     color: var(--text);
     opacity: 1;
     border-color: var(--accent);
@@ -199,6 +202,9 @@
       {% endif %}
     </form>
     {% endif %}
+    {% if vapid_public_key %}
+    <button type="button" id="enable-push-btn" class="push-btn" hidden>{{ t('base.enable_notifications') if t is defined else 'Enable notifications' }}</button>
+    {% endif %}
     <form class="logout-form" method="post" action="/logout">
       <button type="submit">{{ t('base.logout') if t is defined else 'Log out' }}</button>
     </form>
@@ -208,5 +214,81 @@
 <main>
 {% block content %}{% endblock %}
 </main>
+{% if business and vapid_public_key %}
+<script>
+(function () {
+  // Web Push registration (Doc 3 Phase 6.6, notifications/push.py) — deliberately minimal:
+  // if the browser doesn't support any of this, or VAPID isn't configured (the block above
+  // wouldn't even render then), the button and this script are simply inert.
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    return;
+  }
+
+  var vapidPublicKey = {{ vapid_public_key | tojson }};
+  var businessId = {{ business.id | string | tojson }};
+  var enableBtn = document.getElementById("enable-push-btn");
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function subscribe() {
+    navigator.serviceWorker.ready
+      .then(function (registration) {
+        return Notification.requestPermission().then(function (permission) {
+          if (permission !== "granted") {
+            return null;
+          }
+          return registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          });
+        });
+      })
+      .then(function (subscription) {
+        if (!subscription) {
+          return;
+        }
+        var body = subscription.toJSON();
+        body.business_id = businessId;
+        return fetch("/push-subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      })
+      .then(function () {
+        if (enableBtn) {
+          enableBtn.hidden = true;
+        }
+      })
+      .catch(function () {
+        // Permission denied, or the browser/OS blocked it — leave the button visible so the
+        // owner can try again; nothing here is worth surfacing as an error.
+      });
+  }
+
+  navigator.serviceWorker
+    .register("/sw.js")
+    .then(function (registration) {
+      return registration.pushManager.getSubscription();
+    })
+    .then(function (existing) {
+      if (!existing && enableBtn) {
+        enableBtn.hidden = false;
+        enableBtn.addEventListener("click", subscribe);
+      }
+    })
+    .catch(function () {});
+})();
+</script>
+{% endif %}
 </body>
 </html>

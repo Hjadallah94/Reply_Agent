@@ -16,6 +16,7 @@ DEFAULT_LANGUAGE = "en"
 TRANSLATIONS: dict[str, dict[str, str]] = {
     # --- base.html ---
     "base.logout": {"en": "Log out", "ar": "تسجيل الخروج"},
+    "base.enable_notifications": {"en": "Enable notifications", "ar": "تفعيل الإشعارات"},
     # --- dashboard.html ---
     "dashboard.back_all_businesses": {"en": "All businesses", "ar": "جميع الأعمال"},
     "dashboard.whatsapp_connected": {"en": "WhatsApp connected", "ar": "واتساب متصل"},

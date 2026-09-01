@@ -419,3 +419,33 @@ class Subscription(Base):
     period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     business: Mapped["Business"] = relationship(back_populates="subscription")
+
+
+class PushSubscription(Base):
+    """A single browser/device's Web Push subscription (Doc 3 Phase 6.6, notifications/
+    push.py) — keyed on (business_id, user_id) since User already anticipates multiple staff
+    logins per business, each potentially subscribing their own device. endpoint is unique:
+    a subscription is naturally idempotent per browser install, and the endpoint URL itself
+    (not id) is what a re-subscribe from the same device would collide on.
+    """
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh_key: Mapped[str] = mapped_column(Text, nullable=False)
+    auth_key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_push_subscriptions_business_id", "business_id"),
+        UniqueConstraint("endpoint", name="uq_push_subscriptions_endpoint"),
+    )
