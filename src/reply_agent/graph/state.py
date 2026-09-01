@@ -95,6 +95,9 @@ class GraphState(TypedDict):
     # "I'm not available today" (Doc 3 roadmap) — set unconditionally by load_context.py, read
     # by graph/routers.py's is_away_router (pure, no DB call of its own).
     business_is_away: NotRequired[bool]
+    # Business.escalation_rules (Doc 3 roadmap) — same load_context.py fetch, read by
+    # risk_rules.py's evaluate_risk_gate via routers.py's blocks_auto_send (also pure).
+    escalation_rules: NotRequired[dict]
 
     intent: NotRequired[Intent]
     retrieved_context: NotRequired[list[RetrievedChunk]]

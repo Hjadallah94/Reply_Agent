@@ -41,6 +41,20 @@ class OrderExtraction(BaseModel):
     delivery_address: str | None = None
 
 
+def _matches_excluded_location(delivery_address: str, excluded_locations: list[str]) -> bool:
+    """Simple case-insensitive substring match, either direction — good enough for free-text
+    entries like "Sweifieh - back streets" matching a customer address that mentions either
+    the excluded phrase or a shorter version of it (Doc 3 roadmap, partner meeting
+    2026-09-01's "a location that the Owner does not send orders to").
+    """
+    address_lower = delivery_address.lower()
+    return any(
+        excluded.lower() in address_lower or address_lower in excluded.lower()
+        for excluded in excluded_locations
+        if excluded.strip()
+    )
+
+
 EXTRACT_SYSTEM_PROMPT = """The customer is placing an order with an online seller in Jordan.
 Extract:
 - product_count: how many items they're ordering (best guess if not explicit, default 1).
@@ -92,6 +106,16 @@ async def estimate_delivery(state: GraphState) -> dict:
         # Capability gap (risk_rules.py's NO_CAPABILITY_LABELS) — the agent must never guess
         # an address or the shop's own location, so this escalates rather than answering.
         if not extraction.delivery_address or not business.address:
+            return {"delivery_estimate": None}
+
+        # Owner-configured no-delivery locations (Doc 3 roadmap) — checked before the Maps
+        # call, same reasoning as the cutoff check above: deterministic and free, so an
+        # excluded address never costs an API call. Routes through the same capability-gap
+        # path or as a genuine escalation-worthy answer this round — no auto-decline reply yet.
+        excluded_locations = rules.get("excluded_locations", [])
+        if excluded_locations and _matches_excluded_location(
+            extraction.delivery_address, excluded_locations
+        ):
             return {"delivery_estimate": None}
 
         customer = await session.get(Customer, uuid.UUID(state["customer_id"]))

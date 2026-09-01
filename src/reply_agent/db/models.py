@@ -85,6 +85,12 @@ class ApprovalRequestStatus(enum.StrEnum):
     rejected = "rejected"
 
 
+class CustomRuleStatus(enum.StrEnum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class BillingStatus(enum.StrEnum):
     trialing = "trialing"
     active = "active"
@@ -454,3 +460,34 @@ class PushSubscription(Base):
         Index("ix_push_subscriptions_business_id", "business_id"),
         UniqueConstraint("endpoint", name="uq_push_subscriptions_endpoint"),
     )
+
+
+class CustomRule(Base):
+    """A free-text rule an owner submits from the dashboard's Rules page (Doc 3 roadmap,
+    partner meeting 2026-09-01: "better to contact us... so we make sure the agent will behave
+    in the way that is acceptable"). Pending by default and inert — graph/nodes/
+    generate_response.py only injects status=approved rules into the prompt. No dedicated
+    review UI yet: reviewed via direct DB access (reviewed_by is free text, not an admin-user
+    FK — there's no admin-user model in this codebase, same convention as Escalation.resolved_by
+    already using a free-text field rather than a real user reference).
+    """
+
+    __tablename__ = "custom_rules"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    rule_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[CustomRuleStatus] = mapped_column(
+        Enum(CustomRuleStatus, name="custom_rule_status"),
+        nullable=False,
+        default=CustomRuleStatus.pending,
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_custom_rules_business_id", "business_id"),)

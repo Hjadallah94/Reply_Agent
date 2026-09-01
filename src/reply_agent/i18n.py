@@ -25,6 +25,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "dashboard.connect_messenger": {"en": "Connect Facebook Page", "ar": "ربط صفحة فيسبوك"},
     "dashboard.instagram_connected": {"en": "Instagram connected", "ar": "إنستغرام متصل"},
     "dashboard.manage_catalog": {"en": "Manage catalog", "ar": "إدارة الكتالوج"},
+    "dashboard.manage_rules": {"en": "Rules & Autonomy", "ar": "القواعد والاستقلالية"},
     "dashboard.away_heading": {"en": "Availability", "ar": "التوفر"},
     "dashboard.away_status_away": {"en": "Away today", "ar": "غير متاح اليوم"},
     "dashboard.away_status_active": {"en": "Replying normally", "ar": "الرد يعمل بشكل طبيعي"},
@@ -133,6 +134,58 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "promotion_form.save": {"en": "Save changes", "ar": "حفظ التغييرات"},
     "promotion_form.delete": {"en": "Delete promotion", "ar": "حذف العرض"},
+    # --- rules.html (Doc 3 roadmap, partner meeting 2026-09-01) ---
+    "rules.heading": {"en": "Rules & Autonomy", "ar": "القواعد والاستقلالية"},
+    "rules.autonomy_heading": {"en": "Autonomy", "ar": "الاستقلالية"},
+    "rules.autonomy_description": {
+        "en": "Choose which situations the agent can reply to on its own, and how sensitive "
+        "it is to negative tone.",
+        "ar": "اختر الحالات التي يمكن للوكيل الرد عليها بمفرده، ومدى حساسيته للنبرة السلبية.",
+    },
+    "rules.category_price_negotiation": {"en": "Price negotiation", "ar": "التفاوض على السعر"},
+    "rules.category_refund_or_complaint": {
+        "en": "Refunds & complaints",
+        "ar": "الاسترجاع والشكاوى",
+    },
+    "rules.category_competitor_mention": {
+        "en": "Competitor mentions",
+        "ar": "ذكر المنافسين",
+    },
+    "rules.category_legal_threat": {"en": "Legal threats", "ar": "التهديدات القانونية"},
+    "rules.category_hint": {
+        "en": "Checked = still needs your approval. Unchecked = the agent replies on its own "
+        "when it's confident.",
+        "ar": "محدد = ما زال يحتاج موافقتك. غير محدد = يرد الوكيل بمفرده عندما يكون واثقاً.",
+    },
+    "rules.sensitivity_label": {
+        "en": "Sensitivity to negative tone",
+        "ar": "الحساسية للنبرة السلبية",
+    },
+    "rules.sensitivity_cautious": {
+        "en": "Cautious — escalate more often",
+        "ar": "حذر — تصعيد أكثر",
+    },
+    "rules.sensitivity_balanced": {"en": "Balanced (default)", "ar": "متوازن (افتراضي)"},
+    "rules.sensitivity_permissive": {
+        "en": "Permissive — escalate less often",
+        "ar": "متساهل — تصعيد أقل",
+    },
+    "rules.save_autonomy": {"en": "Save autonomy settings", "ar": "حفظ إعدادات الاستقلالية"},
+    "rules.delivery_heading": {"en": "Delivery restrictions", "ar": "قيود التوصيل"},
+    "rules.delivery_description": {
+        "en": "Locations the agent should never promise delivery to — one per line.",
+        "ar": "المواقع التي يجب ألا يعد الوكيل بالتوصيل إليها — موقع واحد في كل سطر.",
+    },
+    "rules.save_delivery": {"en": "Save delivery restrictions", "ar": "حفظ قيود التوصيل"},
+    "rules.custom_heading": {"en": "Custom rules", "ar": "قواعد مخصصة"},
+    "rules.custom_description": {
+        "en": "Write a rule in plain language. We review every custom rule before it goes "
+        "live, to make sure the agent behaves the way you expect.",
+        "ar": "اكتب قاعدة بلغة بسيطة. نراجع كل قاعدة مخصصة قبل تفعيلها للتأكد من أن الوكيل "
+        "سيتصرف كما تتوقع.",
+    },
+    "rules.custom_submit": {"en": "Submit for review", "ar": "إرسال للمراجعة"},
+    "rules.custom_empty": {"en": "No custom rules yet.", "ar": "لا توجد قواعد مخصصة بعد."},
     # --- status/badge values (real enums + conventional stock_status values) ---
     "status.auto": {"en": "Auto", "ar": "تلقائي"},
     "status.owner_handled": {"en": "Owner handled", "ar": "بمعالجة المالك"},

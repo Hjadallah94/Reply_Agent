@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ t('rules.heading') }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ t('rules.heading') }}</h1>
+
+<h2 style="margin: 0 0 4px;">{{ t('rules.autonomy_heading') }}</h2>
+<p class="muted" style="margin: 0 0 14px;">{{ t('rules.autonomy_description') }}</p>
+<form method="post" action="/businesses/{{ business.id }}/dashboard/rules/autonomy">
+  <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px;">
+    <input type="checkbox" name="price_negotiation" value="true" {% if 'price_negotiation' in risk_categories %}checked{% endif %}>
+    {{ t('rules.category_price_negotiation') }}
+  </label>
+  <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px;">
+    <input type="checkbox" name="refund_or_complaint" value="true" {% if 'refund_or_complaint' in risk_categories %}checked{% endif %}>
+    {{ t('rules.category_refund_or_complaint') }}
+  </label>
+  <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px;">
+    <input type="checkbox" name="competitor_mention" value="true" {% if 'competitor_mention' in risk_categories %}checked{% endif %}>
+    {{ t('rules.category_competitor_mention') }}
+  </label>
+  <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 14px;">
+    <input type="checkbox" name="legal_threat" value="true" {% if 'legal_threat' in risk_categories %}checked{% endif %}>
+    {{ t('rules.category_legal_threat') }}
+  </label>
+  <p class="muted" style="margin: 0 0 16px; font-size: 12.5px;">{{ t('rules.category_hint') }}</p>
+
+  <div class="field">
+    <label for="sensitivity">{{ t('rules.sensitivity_label') }}</label>
+    <select name="sensitivity" id="sensitivity" style="width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14.5px;">
+      <option value="cautious" {% if sensitivity == 'cautious' %}selected{% endif %}>{{ t('rules.sensitivity_cautious') }}</option>
+      <option value="balanced" {% if sensitivity == 'balanced' %}selected{% endif %}>{{ t('rules.sensitivity_balanced') }}</option>
+      <option value="permissive" {% if sensitivity == 'permissive' %}selected{% endif %}>{{ t('rules.sensitivity_permissive') }}</option>
+    </select>
+  </div>
+  <button type="submit">{{ t('rules.save_autonomy') }}</button>
+</form>
+
+<h2 style="margin: 32px 0 4px;">{{ t('rules.delivery_heading') }}</h2>
+<form method="post" action="/businesses/{{ business.id }}/dashboard/rules/delivery-restrictions">
+  <label for="excluded_locations" class="muted" style="display: block; margin: 0 0 8px; font-size: 13.5px;">{{ t('rules.delivery_description') }}</label>
+  <textarea name="excluded_locations" id="excluded_locations" style="min-height: 90px;">{{ excluded_locations }}</textarea>
+  <button type="submit">{{ t('rules.save_delivery') }}</button>
+</form>
+
+<h2 style="margin: 32px 0 4px;">{{ t('rules.custom_heading') }}</h2>
+<label for="rule_text" class="muted" style="display: block; margin: 0 0 14px; font-size: 13.5px;">{{ t('rules.custom_description') }}</label>
+{% if custom_rules %}
+  {% for rule in custom_rules %}
+  <div class="card">
+    <div class="row">
+      <span>{{ rule.rule_text }}</span>
+      <span class="badge {{ 'resolved' if rule.status.value == 'approved' else 'closed' if rule.status.value == 'rejected' else 'pending' }}">{{ t_status(rule.status.value) }}</span>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">{{ t('rules.custom_empty') }}</p>
+{% endif %}
+<form method="post" action="/businesses/{{ business.id }}/dashboard/rules/custom" style="margin-top: 12px;">
+  <textarea name="rule_text" id="rule_text" required style="min-height: 70px;"></textarea>
+  <button type="submit">{{ t('rules.custom_submit') }}</button>
+</form>
+{% endblock %}

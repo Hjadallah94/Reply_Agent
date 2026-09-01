@@ -2,7 +2,13 @@ import uuid
 
 from sqlalchemy import select
 
-from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument
+from reply_agent.db.models import (
+    Business,
+    CustomRule,
+    CustomRuleStatus,
+    KnowledgeDocType,
+    KnowledgeDocument,
+)
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.llm.client import get_anthropic_client
@@ -32,6 +38,17 @@ async def generate_response(state: GraphState) -> dict:
             )
         ).all()
 
+        # Doc 3 roadmap (partner meeting 2026-09-01) — only approved custom rules reach the
+        # prompt; a pending or rejected one is inert (see db/models.py's CustomRule docstring).
+        approved_rules = (
+            await session.scalars(
+                select(CustomRule).where(
+                    CustomRule.business_id == business_id,
+                    CustomRule.status == CustomRuleStatus.approved,
+                )
+            )
+        ).all()
+
     retrieved_context = state.get("retrieved_context", [])
     context_text = "\n\n".join(f"[source {c['source']}] {c['snippet']}" for c in retrieved_context)
     system_prompt = build_system_prompt(
@@ -39,6 +56,7 @@ async def generate_response(state: GraphState) -> dict:
         brand_voice_examples=[doc.content for doc in brand_voice_docs],
         retrieved_context=context_text,
         delivery_estimate=state.get("delivery_estimate"),
+        custom_rules=[rule.rule_text for rule in approved_rules],
     )
 
     history = state["conversation_history"][-6:]

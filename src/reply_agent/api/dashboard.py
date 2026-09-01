@@ -35,6 +35,7 @@ from reply_agent.db.models import (
     Conversation,
     ConversationStatus,
     Customer,
+    CustomRule,
     Escalation,
     EscalationStatus,
     KnowledgeDocType,
@@ -47,6 +48,11 @@ from reply_agent.db.models import (
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from reply_agent.graph.nodes.send_reply import send_reply
+from reply_agent.graph.risk_rules import (
+    DEFAULT_SENSITIVITY,
+    RISK_INTENT_LABELS,
+    SENSITIVITY_THRESHOLDS,
+)
 from reply_agent.i18n import SUPPORTED_LANGUAGES, get_lang, t, t_status
 from reply_agent.knowledge.catalog import (
     create_product,
@@ -289,6 +295,100 @@ async def set_away_mode(
         db_business.away_message = away_message.strip() or None
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/rules")
+async def rules_page(request: Request, business: Business = Depends(require_business_access)):
+    async with tenant_session(business.id) as session:
+        custom_rules = (
+            await session.scalars(
+                select(CustomRule)
+                .where(CustomRule.business_id == business.id)
+                .order_by(CustomRule.created_at.desc())
+            )
+        ).all()
+
+    escalation_rules = business.escalation_rules or {}
+    excluded_locations = "\n".join((business.delivery_rules or {}).get("excluded_locations", []))
+
+    return _render(
+        request,
+        "rules.html",
+        business=business,
+        risk_categories=set(escalation_rules.get("risk_categories", RISK_INTENT_LABELS)),
+        sensitivity=escalation_rules.get("sensitivity", DEFAULT_SENSITIVITY),
+        excluded_locations=excluded_locations,
+        custom_rules=custom_rules,
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/rules/autonomy")
+async def save_autonomy_rules(
+    business_id: uuid.UUID,
+    price_negotiation: bool = Form(False),
+    refund_or_complaint: bool = Form(False),
+    competitor_mention: bool = Form(False),
+    legal_threat: bool = Form(False),
+    sensitivity: str = Form(DEFAULT_SENSITIVITY),
+    business: Business = Depends(require_business_access),
+):
+    if sensitivity not in SENSITIVITY_THRESHOLDS:
+        raise HTTPException(status_code=400, detail="Invalid sensitivity")
+
+    risk_categories = [
+        label
+        for label, checked in [
+            ("price_negotiation", price_negotiation),
+            ("refund_or_complaint", refund_or_complaint),
+            ("competitor_mention", competitor_mention),
+            ("legal_threat", legal_threat),
+        ]
+        if checked
+    ]
+
+    async with tenant_session(business_id) as session:
+        db_business = await session.get(Business, business_id)
+        db_business.escalation_rules = {
+            **(db_business.escalation_rules or {}),
+            "risk_categories": risk_categories,
+            "sensitivity": sensitivity,
+        }
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/rules", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/rules/delivery-restrictions")
+async def save_delivery_restrictions(
+    business_id: uuid.UUID,
+    excluded_locations: str = Form(""),
+    business: Business = Depends(require_business_access),
+):
+    locations = [line.strip() for line in excluded_locations.splitlines() if line.strip()]
+
+    async with tenant_session(business_id) as session:
+        db_business = await session.get(Business, business_id)
+        db_business.delivery_rules = {
+            **(db_business.delivery_rules or {}),
+            "excluded_locations": locations,
+        }
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/rules", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/rules/custom")
+async def submit_custom_rule(
+    business_id: uuid.UUID,
+    rule_text: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    rule_text = rule_text.strip()
+    if not rule_text:
+        raise HTTPException(status_code=400, detail="Rule text is required")
+
+    async with tenant_session(business_id) as session:
+        session.add(CustomRule(business_id=business_id, rule_text=rule_text))
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/rules", status_code=303)
 
 
 @router.get("/businesses/{business_id}/dashboard/export")

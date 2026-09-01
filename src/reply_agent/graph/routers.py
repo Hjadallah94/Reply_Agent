@@ -40,6 +40,7 @@ def blocks_auto_send(state: GraphState) -> bool:
             state["intent"],
             order_found=order_found,
             delivery_estimate_found=delivery_estimate_found,
+            escalation_rules=state.get("escalation_rules"),
         )
         is not None
     )

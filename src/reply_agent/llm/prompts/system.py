@@ -18,8 +18,15 @@ def build_system_prompt(
     brand_voice_examples: list[str],
     retrieved_context: str,
     delivery_estimate: dict | None = None,
+    custom_rules: list[str] | None = None,
 ) -> str:
     parts = [BASE_SYSTEM_PROMPT, f"\nYou are replying on behalf of: {business_name}"]
+
+    if custom_rules:
+        # Doc 3 roadmap (partner meeting 2026-09-01) — only ever status=approved CustomRule
+        # rows reach here (graph/nodes/generate_response.py), never a pending/rejected one.
+        parts.append("\nAdditional rules from the seller (follow these strictly):")
+        parts.extend(f"- {rule}" for rule in custom_rules)
 
     if brand_voice_examples:
         parts.append(

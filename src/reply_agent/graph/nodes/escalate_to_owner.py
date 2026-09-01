@@ -28,7 +28,10 @@ def _escalation_reason(state: GraphState) -> str:
     delivery_estimate_found = state.get("delivery_estimate") is not None
     reason = (
         blocking_reason(
-            intent, order_found=order_found, delivery_estimate_found=delivery_estimate_found
+            intent,
+            order_found=order_found,
+            delivery_estimate_found=delivery_estimate_found,
+            escalation_rules=state.get("escalation_rules"),
         )
         if intent
         else None

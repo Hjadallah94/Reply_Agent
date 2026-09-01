@@ -1,6 +1,15 @@
-"""Hard-coded risk categories that always route to escalation regardless of downstream
-confidence (Doc 2 Section 2.4). This is a deterministic rule engine over classify_intent's
-structured output, not a separate LLM call.
+"""Risk categories that route to escalation regardless of downstream confidence (Doc 2 Section
+2.4). This is a deterministic rule engine over classify_intent's structured output, not a
+separate LLM call.
+
+Doc 3 roadmap (partner meeting 2026-09-01): the four RISK_INTENT_LABELS and the negative-
+sentiment threshold are now owner-configurable per business (Business.escalation_rules, wired
+in via GraphState["escalation_rules"] — see graph/nodes/load_context.py). RISK_INTENT_LABELS/
+SENSITIVITY_THRESHOLDS below are the *defaults* used when a business hasn't customized
+anything, so every existing/unconfigured business keeps today's exact behavior. Deliberately
+NOT configurable: NO_CAPABILITY_LABELS below — those escalate because the agent structurally
+lacks grounded data, not because of risk tolerance, so toggling one off would let the agent
+guess rather than express a genuine "I trust the agent with this topic" preference.
 """
 
 from reply_agent.graph.state import Intent
@@ -11,6 +20,9 @@ RISK_INTENT_LABELS = {
     "competitor_mention",
     "legal_threat",
 }
+
+SENSITIVITY_THRESHOLDS = {"cautious": 0.4, "balanced": 0.6, "permissive": 0.8}
+DEFAULT_SENSITIVITY = "balanced"
 
 # Not a risk category — these intents aren't sensitive, the agent just structurally can't
 # answer them yet. An honest "I don't know" hedge is technically true but doesn't actually
@@ -25,13 +37,19 @@ RISK_INTENT_LABELS = {
 NO_CAPABILITY_LABELS = {"order_status", "place_order"}
 
 
-def evaluate_risk_gate(intent: Intent) -> str | None:
+def evaluate_risk_gate(intent: Intent, escalation_rules: dict | None = None) -> str | None:
     """Returns a human-readable escalation reason if this intent should be risk-gated,
-    else None.
+    else None. escalation_rules is the business's own Business.escalation_rules — None or
+    missing keys fall back to RISK_INTENT_LABELS/DEFAULT_SENSITIVITY, today's exact behavior.
     """
-    if intent["label"] in RISK_INTENT_LABELS:
+    rules = escalation_rules or {}
+    risk_categories = set(rules.get("risk_categories", RISK_INTENT_LABELS))
+    threshold = SENSITIVITY_THRESHOLDS.get(
+        rules.get("sensitivity", DEFAULT_SENSITIVITY), SENSITIVITY_THRESHOLDS[DEFAULT_SENSITIVITY]
+    )
+    if intent["label"] in risk_categories:
         return f"Risk category: {intent['label']}"
-    if intent["sentiment"] == "negative" and intent["confidence"] >= 0.6:
+    if intent["sentiment"] == "negative" and intent["confidence"] >= threshold:
         return "Strongly negative customer sentiment"
     return None
 
@@ -54,10 +72,14 @@ def evaluate_capability_gap(
 
 
 def blocking_reason(
-    intent: Intent, *, order_found: bool = False, delivery_estimate_found: bool = False
+    intent: Intent,
+    *,
+    order_found: bool = False,
+    delivery_estimate_found: bool = False,
+    escalation_rules: dict | None = None,
 ) -> str | None:
     """Combined check: any reason confidence_router must never choose 'send' for this intent."""
-    return evaluate_risk_gate(intent) or evaluate_capability_gap(
+    return evaluate_risk_gate(intent, escalation_rules) or evaluate_capability_gap(
         intent, order_found=order_found, delivery_estimate_found=delivery_estimate_found
     )
 

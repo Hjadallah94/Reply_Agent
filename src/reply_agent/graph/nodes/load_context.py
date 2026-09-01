@@ -75,4 +75,5 @@ async def load_context(state: GraphState) -> dict:
             "prior_escalations": prior_escalation_count or 0,
         },
         "business_is_away": business.is_away,
+        "escalation_rules": business.escalation_rules,
     }
