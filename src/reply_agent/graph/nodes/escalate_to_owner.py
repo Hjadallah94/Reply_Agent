@@ -21,6 +21,12 @@ from reply_agent.notifications.push import send_push_to_business
 
 
 def _escalation_reason(state: GraphState) -> str:
+    # Doc 3 roadmap (order confirmation layer) — classify_confirmation_reply.py routes straight
+    # here on an ambiguous confirmation reply, with no intent/self_check to fall back on at all;
+    # this override takes priority since it's the actual, specific reason in that case.
+    if state.get("escalation_override_reason"):
+        return state["escalation_override_reason"]
+
     # Prefer the risk/capability-gap reason when present — it's more actionable for the owner
     # than a self_check note, even if self_check happened to pass this particular draft.
     intent = state.get("intent")

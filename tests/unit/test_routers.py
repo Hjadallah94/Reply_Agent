@@ -2,8 +2,9 @@ from reply_agent.graph.routers import (
     MAX_RETRIEVAL_ATTEMPTS,
     blocks_auto_send,
     confidence_router,
-    is_away_router,
+    load_context_router,
     needs_owner_approval,
+    order_confirmation_router,
 )
 
 
@@ -119,7 +120,22 @@ def test_blocks_auto_send_false_for_order_status_with_order_context():
     assert blocks_auto_send(state) is False
 
 
-def test_needs_owner_approval_true_for_same_day_eligible_place_order():
+def test_needs_owner_approval_true_for_same_day_eligible_confirmed_place_order():
+    state = {
+        "intent": make_intent(label="place_order"),
+        "delivery_estimate": {
+            "same_day_eligible": True,
+            "estimated_window": "3-4 hours",
+            "reasoning": "quiet day",
+        },
+        "order_confirmation_decision": "confirmed",
+    }
+    assert needs_owner_approval(state) is True
+
+
+def test_needs_owner_approval_false_for_same_day_eligible_order_not_yet_confirmed():
+    """Doc 3 roadmap (order confirmation layer): a mere confirmation-request draft (the
+    customer hasn't confirmed yet) must never need the owner's sign-off."""
     state = {
         "intent": make_intent(label="place_order"),
         "delivery_estimate": {
@@ -128,7 +144,7 @@ def test_needs_owner_approval_true_for_same_day_eligible_place_order():
             "reasoning": "quiet day",
         },
     }
-    assert needs_owner_approval(state) is True
+    assert needs_owner_approval(state) is False
 
 
 def test_needs_owner_approval_false_for_next_day_deferral():
@@ -151,7 +167,24 @@ def test_needs_owner_approval_false_when_delivery_estimate_missing():
     assert needs_owner_approval(state) is False
 
 
-def test_confidence_router_routes_same_day_eligible_order_to_approve():
+def test_confidence_router_routes_same_day_eligible_confirmed_order_to_approve():
+    state = {
+        "intent": make_intent(label="place_order"),
+        "self_check": {"passed": True, "reason": "grounded", "needs_retry": False},
+        "retrieval_attempts": 0,
+        "delivery_estimate": {
+            "same_day_eligible": True,
+            "estimated_window": "3-4 hours",
+            "reasoning": "quiet day",
+        },
+        "order_confirmation_decision": "confirmed",
+    }
+    assert confidence_router(state) == "approve"
+
+
+def test_confidence_router_sends_same_day_eligible_order_not_yet_confirmed():
+    """The confirmation-request draft itself just auto-sends (or escalates on self_check
+    failure, unchanged) — owner-approval only kicks in once the customer has confirmed."""
     state = {
         "intent": make_intent(label="place_order"),
         "self_check": {"passed": True, "reason": "grounded", "needs_retry": False},
@@ -162,7 +195,7 @@ def test_confidence_router_routes_same_day_eligible_order_to_approve():
             "reasoning": "quiet day",
         },
     }
-    assert confidence_router(state) == "approve"
+    assert confidence_router(state) == "send"
 
 
 def test_confidence_router_sends_next_day_deferral_unchanged():
@@ -179,13 +212,47 @@ def test_confidence_router_sends_next_day_deferral_unchanged():
     assert confidence_router(state) == "send"
 
 
-def test_is_away_router_routes_away_when_business_is_away():
-    assert is_away_router({"business_is_away": True}) == "away"
+def test_load_context_router_routes_away_when_business_is_away():
+    assert load_context_router({"business_is_away": True}) == "away"
 
 
-def test_is_away_router_routes_continue_when_not_away():
-    assert is_away_router({"business_is_away": False}) == "continue"
+def test_load_context_router_routes_continue_when_not_away_and_no_pending_order():
+    assert load_context_router({"business_is_away": False}) == "continue"
 
 
-def test_is_away_router_defaults_to_continue_when_field_missing():
-    assert is_away_router({}) == "continue"
+def test_load_context_router_defaults_to_continue_when_fields_missing():
+    assert load_context_router({}) == "continue"
+
+
+def test_load_context_router_routes_pending_confirmation_when_order_is_pending():
+    state = {
+        "business_is_away": False,
+        "pending_order": {
+            "id": "order-1",
+            "order_reference": "chat-abc123",
+            "delivery_window_promised": "3-4 hours",
+        },
+    }
+    assert load_context_router(state) == "pending_confirmation"
+
+
+def test_load_context_router_away_takes_priority_over_pending_confirmation():
+    state = {
+        "business_is_away": True,
+        "pending_order": {
+            "id": "order-1",
+            "order_reference": "chat-abc123",
+            "delivery_window_promised": "3-4 hours",
+        },
+    }
+    assert load_context_router(state) == "away"
+
+
+def test_order_confirmation_router_routes_by_decision():
+    assert order_confirmation_router({"order_confirmation_decision": "confirmed"}) == "confirmed"
+    assert order_confirmation_router({"order_confirmation_decision": "declined"}) == "declined"
+    assert order_confirmation_router({"order_confirmation_decision": "unclear"}) == "unclear"
+
+
+def test_order_confirmation_router_defaults_to_unclear_when_missing():
+    assert order_confirmation_router({}) == "unclear"

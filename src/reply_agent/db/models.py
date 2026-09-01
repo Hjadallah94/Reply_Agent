@@ -91,6 +91,20 @@ class CustomRuleStatus(enum.StrEnum):
     rejected = "rejected"
 
 
+class OrderConfirmationStatus(enum.StrEnum):
+    """Doc 3 roadmap (partner meeting 2026-09-01, order confirmation layer) — only ever set for
+    orders created live through a conversation (graph/nodes/estimate_delivery.py); stays NULL
+    for spreadsheet-synced orders (orders/sync.py), which never go through this round-trip.
+    `escalated` is the "customer's confirmation reply was ambiguous" case — the owner takes it
+    from there via the normal escalation flow, so this Order's own state machine stops here.
+    """
+
+    pending = "pending"
+    confirmed = "confirmed"
+    declined = "declined"
+    escalated = "escalated"
+
+
 class BillingStatus(enum.StrEnum):
     trialing = "trialing"
     active = "active"
@@ -117,7 +131,7 @@ class Business(Base):
     delivery_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     # "I'm not available today" (Doc 3 roadmap, partner meeting 2026-09-01) — while true, every
     # incoming message gets away_message (or a translated default) instead of the normal
-    # pipeline; see graph/routers.py's is_away_router and graph/nodes/send_away_reply.py.
+    # pipeline; see graph/routers.py's load_context_router and graph/nodes/send_away_reply.py.
     is_away: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     away_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -209,6 +223,10 @@ class Order(Base):
     delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_window_promised: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Doc 3 roadmap (order confirmation layer) — nullable, see OrderConfirmationStatus docstring.
+    confirmation_status: Mapped[OrderConfirmationStatus | None] = mapped_column(
+        Enum(OrderConfirmationStatus, name="order_confirmation_status"), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

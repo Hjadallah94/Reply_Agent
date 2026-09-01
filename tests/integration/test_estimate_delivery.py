@@ -14,7 +14,14 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import delete, select
 
-from reply_agent.db.models import Business, ChannelType, Customer, Order, PlanTier
+from reply_agent.db.models import (
+    Business,
+    ChannelType,
+    Customer,
+    Order,
+    OrderConfirmationStatus,
+    PlanTier,
+)
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.nodes.estimate_delivery import OrderExtraction, estimate_delivery
 
@@ -77,7 +84,12 @@ async def test_non_place_order_intent_is_a_noop():
     assert await estimate_delivery(state) == {}
 
 
-async def test_after_cutoff_defers_to_next_day_without_any_external_calls(business, customer):
+async def test_after_cutoff_defers_to_next_day_and_creates_a_pending_confirmation_order(
+    business, customer
+):
+    """Doc 3 roadmap (order confirmation layer): unlike before, this path now DOES cost an
+    extraction call (needed for the Order row below) — only the Maps call stays free, since a
+    past-cutoff order never needs a live transit estimate."""
     late_time = datetime(2026, 8, 28, 16, 0, tzinfo=AMMAN_TZ)  # 4pm, past the 3pm cutoff
     state = _state(business.id, customer.id, "I'd like to order 2 boxes of chocolate chip")
 
@@ -85,7 +97,12 @@ async def test_after_cutoff_defers_to_next_day_without_any_external_calls(busine
         mock_dt.now.return_value = late_time
         with (
             patch(
-                "reply_agent.graph.nodes.estimate_delivery._extract_order_details"
+                "reply_agent.graph.nodes.estimate_delivery._extract_order_details",
+                new=AsyncMock(
+                    return_value=OrderExtraction(
+                        product_count=2, delivery_address="Sweifieh, Amman"
+                    )
+                ),
             ) as mock_extract,
             patch(
                 "reply_agent.graph.nodes.estimate_delivery.estimate_transit_minutes"
@@ -95,9 +112,16 @@ async def test_after_cutoff_defers_to_next_day_without_any_external_calls(busine
 
     assert result["delivery_estimate"]["same_day_eligible"] is False
     assert result["delivery_estimate"]["estimated_window"] == "tomorrow"
-    # The whole point of the cutoff short-circuit: zero cost, neither external call happens.
-    mock_extract.assert_not_called()
+    assert result["delivery_estimate"]["order_reference"]
+    mock_extract.assert_called_once()
+    # The Maps call is still free — a past-cutoff order never needs a live transit estimate.
     mock_maps.assert_not_called()
+
+    async with get_sessionmaker()() as session:
+        order = await session.scalar(select(Order).where(Order.business_id == business.id))
+        assert order is not None
+        assert order.confirmation_status == OrderConfirmationStatus.pending
+        assert order.delivery_window_promised == "tomorrow"
 
 
 async def test_before_cutoff_with_no_address_is_a_capability_gap(business, customer):
@@ -152,3 +176,4 @@ async def test_before_cutoff_computes_estimate_and_backlog_grows_across_orders(b
         ).all()
         assert len(orders) == 2
         assert all(o.delivery_status == "pending" for o in orders)
+        assert all(o.confirmation_status == OrderConfirmationStatus.pending for o in orders)

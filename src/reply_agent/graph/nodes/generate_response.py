@@ -51,12 +51,25 @@ async def generate_response(state: GraphState) -> dict:
 
     retrieved_context = state.get("retrieved_context", [])
     context_text = "\n\n".join(f"[source {c['source']}] {c['snippet']}" for c in retrieved_context)
+
+    # Doc 3 roadmap (order confirmation layer) — a place_order draft asks the customer to
+    # confirm rather than declaring the order placed, unless they already have (reached via
+    # classify_confirmation_reply's "confirmed" branch) or there's nothing yet to confirm
+    # (no delivery_estimate means this is a capability gap, escalating regardless of the draft).
+    order_intent = state.get("intent") or {}
+    require_order_confirmation = (
+        order_intent.get("label") == "place_order"
+        and state.get("order_confirmation_decision") != "confirmed"
+        and state.get("delivery_estimate") is not None
+    )
+
     system_prompt = build_system_prompt(
         business_name=business.name if business else "this seller",
         brand_voice_examples=[doc.content for doc in brand_voice_docs],
         retrieved_context=context_text,
         delivery_estimate=state.get("delivery_estimate"),
         custom_rules=[rule.rule_text for rule in approved_rules],
+        require_order_confirmation=require_order_confirmation,
     )
 
     history = state["conversation_history"][-6:]

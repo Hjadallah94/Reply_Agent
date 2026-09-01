@@ -70,6 +70,17 @@ class DeliveryEstimate(TypedDict):
     order_reference: NotRequired[str | None]
 
 
+class PendingOrder(TypedDict):
+    """The most recent still-unconfirmed conversational Order for this customer (Doc 3 roadmap,
+    order confirmation layer) — set by load_context.py, read by graph/routers.py's
+    load_context_router and graph/nodes/classify_confirmation_reply.py.
+    """
+
+    id: str
+    order_reference: str
+    delivery_window_promised: str
+
+
 class ApprovalRecord(TypedDict):
     """graph/nodes/request_owner_approval.py's output (Doc 2 Section 9.2) — distinct from
     EscalationRecord: this fires when the agent IS confident, not unsure, but a same-day
@@ -93,7 +104,7 @@ class GraphState(TypedDict):
     customer_profile: CustomerProfile
 
     # "I'm not available today" (Doc 3 roadmap) — set unconditionally by load_context.py, read
-    # by graph/routers.py's is_away_router (pure, no DB call of its own).
+    # by graph/routers.py's load_context_router (pure, no DB call of its own).
     business_is_away: NotRequired[bool]
     # Business.escalation_rules (Doc 3 roadmap) — same load_context.py fetch, read by
     # risk_rules.py's evaluate_risk_gate via routers.py's blocks_auto_send (also pure).
@@ -103,9 +114,16 @@ class GraphState(TypedDict):
     retrieved_context: NotRequired[list[RetrievedChunk]]
     draft_reply: NotRequired[DraftReply]
     self_check: NotRequired[SelfCheckResult]
-    route: NotRequired[Literal["send", "escalate", "retry", "approve", "away"]]
+    route: NotRequired[Literal["send", "escalate", "retry", "approve", "away", "order_declined"]]
     escalation: NotRequired[EscalationRecord | None]
     delivery_estimate: NotRequired[DeliveryEstimate | None]
     approval: NotRequired[ApprovalRecord | None]
+
+    # Doc 3 roadmap (order confirmation layer) — set by load_context.py/classify_confirmation_
+    # reply.py, read by graph/routers.py (load_context_router, order_confirmation_router,
+    # needs_owner_approval) and graph/nodes/escalate_to_owner.py.
+    pending_order: NotRequired[PendingOrder | None]
+    order_confirmation_decision: NotRequired[Literal["confirmed", "declined", "unclear"]]
+    escalation_override_reason: NotRequired[str]
 
     retrieval_attempts: NotRequired[int]

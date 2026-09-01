@@ -30,3 +30,18 @@ def test_multiple_custom_rules_each_get_their_own_line():
 def test_empty_custom_rules_list_is_same_as_none():
     assert "Additional rules" not in _prompt(custom_rules=[])
     assert "Additional rules" not in _prompt(custom_rules=None)
+
+
+def test_order_confirmation_instruction_absent_by_default():
+    prompt = _prompt()
+    assert "before this order is treated as placed" not in prompt
+
+
+def test_order_confirmation_instruction_appears_when_required():
+    prompt = _prompt(require_order_confirmation=True)
+    assert "before this order is treated as placed" in prompt
+    assert "Do NOT say the order is placed or confirmed yet" in prompt
+
+
+def test_order_confirmation_instruction_absent_when_explicitly_false():
+    assert "before this order is treated as placed" not in _prompt(require_order_confirmation=False)

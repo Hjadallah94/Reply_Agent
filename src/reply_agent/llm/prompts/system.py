@@ -19,6 +19,7 @@ def build_system_prompt(
     retrieved_context: str,
     delivery_estimate: dict | None = None,
     custom_rules: list[str] | None = None,
+    require_order_confirmation: bool = False,
 ) -> str:
     parts = [BASE_SYSTEM_PROMPT, f"\nYou are replying on behalf of: {business_name}"]
 
@@ -53,6 +54,17 @@ def build_system_prompt(
             "below is the single most important thing to include in your reply, ahead of any "
             "other product detail or question you might otherwise ask first:\n"
             f"{delivery_line}"
+        )
+
+    if require_order_confirmation:
+        # Doc 3 roadmap (partner meeting 2026-09-01, order confirmation layer) — the customer
+        # hasn't confirmed this order yet, so the draft must ask rather than declare.
+        parts.append(
+            "\nIMPORTANT — before this order is treated as placed, you must first summarize "
+            "exactly what you understood (the items, the price, the delivery address, and the "
+            "delivery window above) and explicitly ask the customer to confirm it's correct or "
+            "tell you what to fix. Do NOT say the order is placed or confirmed yet — that only "
+            "happens once the customer confirms in a follow-up message."
         )
 
     parts.append(

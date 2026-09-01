@@ -11,6 +11,13 @@ floor clamped onto every estimate — the live computation below (transit time +
 is what actually gets quoted, and can legitimately beat it on a quiet day. Confirmed directly
 with the business owner, not assumed: a 6h "usual minimum" and a live 3-4h estimate on a good
 day are both correct, not a contradiction.
+
+Doc 3 roadmap (partner meeting 2026-09-01, order confirmation layer): _extract_order_details
+now always runs, even past the same-day cutoff — every place_order needs a delivery_address to
+create the pending-confirmation Order row below, not just same-day ones. This costs one Haiku
+call on a past-cutoff message that used to be entirely free/deterministic; confirmed with the
+business owner as worth it (AskUserQuestion) to close the gap where next-day orders previously
+auto-sent with zero customer/owner check of any kind.
 """
 
 import uuid
@@ -20,7 +27,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from reply_agent.db.models import Business, Customer, Order
+from reply_agent.db.models import Business, Customer, Order, OrderConfirmationStatus
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.integrations.google_maps import GoogleMapsError, estimate_transit_minutes
@@ -88,19 +95,8 @@ async def estimate_delivery(state: GraphState) -> dict:
         cutoff_hour = rules.get("cutoff_hour", DEFAULT_CUTOFF_HOUR)
         min_lead_hours = rules.get("min_lead_hours", DEFAULT_MIN_LEAD_HOURS)
 
-        now_amman = datetime.now(AMMAN_TZ)
-
-        if now_amman.time() >= time(cutoff_hour):
-            # Deterministic and free — checked before either external call, not after, so a
-            # past-cutoff message never costs an extraction call or a Maps call.
-            return {
-                "delivery_estimate": {
-                    "same_day_eligible": False,
-                    "estimated_window": "tomorrow",
-                    "reasoning": f"Past the {cutoff_hour}:00 same-day cutoff.",
-                }
-            }
-
+        # Now runs unconditionally (module docstring) — every place_order needs an address to
+        # create the pending-confirmation Order row below, whichever branch it takes.
         extraction = await _extract_order_details(state["message"]["text"])
 
         # Capability gap (risk_rules.py's NO_CAPABILITY_LABELS) — the agent must never guess
@@ -109,9 +105,8 @@ async def estimate_delivery(state: GraphState) -> dict:
             return {"delivery_estimate": None}
 
         # Owner-configured no-delivery locations (Doc 3 roadmap) — checked before the Maps
-        # call, same reasoning as the cutoff check above: deterministic and free, so an
-        # excluded address never costs an API call. Routes through the same capability-gap
-        # path or as a genuine escalation-worthy answer this round — no auto-decline reply yet.
+        # call: deterministic and free, so an excluded address never costs an API call. Routes
+        # through the same capability-gap path — no auto-decline reply yet.
         excluded_locations = rules.get("excluded_locations", [])
         if excluded_locations and _matches_excluded_location(
             extraction.delivery_address, excluded_locations
@@ -119,6 +114,32 @@ async def estimate_delivery(state: GraphState) -> dict:
             return {"delivery_estimate": None}
 
         customer = await session.get(Customer, uuid.UUID(state["customer_id"]))
+        now_amman = datetime.now(AMMAN_TZ)
+
+        if now_amman.time() >= time(cutoff_hour):
+            order_reference = f"chat-{uuid.uuid4().hex[:8]}"
+            session.add(
+                Order(
+                    business_id=business_id,
+                    order_reference=order_reference,
+                    customer_phone=customer.channel_handle if customer else "",
+                    status="pending_delivery_estimate",
+                    items_summary=f"{extraction.product_count} item(s)",
+                    order_date=now_amman,
+                    delivery_address=extraction.delivery_address,
+                    delivery_window_promised="tomorrow",
+                    delivery_status="pending",
+                    confirmation_status=OrderConfirmationStatus.pending,
+                )
+            )
+            return {
+                "delivery_estimate": {
+                    "same_day_eligible": False,
+                    "estimated_window": "tomorrow",
+                    "reasoning": f"Past the {cutoff_hour}:00 same-day cutoff.",
+                    "order_reference": order_reference,
+                }
+            }
 
         backlog_count = await session.scalar(
             select(func.count(Order.id)).where(
@@ -151,6 +172,7 @@ async def estimate_delivery(state: GraphState) -> dict:
                 delivery_address=extraction.delivery_address,
                 delivery_window_promised=window_text,
                 delivery_status="pending",
+                confirmation_status=OrderConfirmationStatus.pending,
             )
         )
 

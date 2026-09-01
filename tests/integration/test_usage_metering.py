@@ -52,24 +52,25 @@ async def conversation():
         await session.commit()
         await session.refresh(conversation)
 
-        yield business, conversation
+        yield business, conversation, customer
 
         await session.execute(delete(Business).where(Business.id == business.id))
         await session.commit()
 
 
-def _state(business_id, thread_id: str, text: str, channel_message_id: str) -> dict:
+def _state(business_id, customer_id, thread_id: str, text: str, channel_message_id: str) -> dict:
     return {
         "business_id": str(business_id),
+        "customer_id": str(customer_id),
         "thread_id": thread_id,
         "message": {"text": text, "channel_message_id": channel_message_id},
     }
 
 
 async def test_new_message_creates_subscription_and_increments_usage(conversation):
-    business, convo = conversation
+    business, convo, customer = conversation
 
-    await load_context(_state(business.id, convo.thread_id, "hello", "wamid-usage-1"))
+    await load_context(_state(business.id, customer.id, convo.thread_id, "hello", "wamid-usage-1"))
 
     async with get_sessionmaker()() as session:
         subscription = await session.get(Subscription, business.id)
@@ -79,10 +80,14 @@ async def test_new_message_creates_subscription_and_increments_usage(conversatio
 
 
 async def test_redelivered_webhook_does_not_double_count(conversation):
-    business, convo = conversation
+    business, convo, customer = conversation
 
-    await load_context(_state(business.id, convo.thread_id, "hello", "wamid-usage-dup"))
-    await load_context(_state(business.id, convo.thread_id, "hello", "wamid-usage-dup"))
+    await load_context(
+        _state(business.id, customer.id, convo.thread_id, "hello", "wamid-usage-dup")
+    )
+    await load_context(
+        _state(business.id, customer.id, convo.thread_id, "hello", "wamid-usage-dup")
+    )
 
     async with get_sessionmaker()() as session:
         subscription = await session.get(Subscription, business.id)
@@ -90,14 +95,16 @@ async def test_redelivered_webhook_does_not_double_count(conversation):
 
 
 async def test_usage_keeps_incrementing_past_cap(conversation):
-    business, convo = conversation
+    business, convo, customer = conversation
 
     async with get_sessionmaker()() as session:
         subscription = await get_or_create_subscription(session, business)
         subscription.message_usage_current_period = 400  # already at the Starter cap
         await session.commit()
 
-    await load_context(_state(business.id, convo.thread_id, "one more", "wamid-usage-overcap"))
+    await load_context(
+        _state(business.id, customer.id, convo.thread_id, "one more", "wamid-usage-overcap")
+    )
 
     async with get_sessionmaker()() as session:
         subscription = await session.get(Subscription, business.id)
@@ -105,7 +112,7 @@ async def test_usage_keeps_incrementing_past_cap(conversation):
 
 
 async def test_lapsed_period_resets_usage(conversation):
-    business, convo = conversation
+    business, convo, customer = conversation
 
     async with get_sessionmaker()() as session:
         subscription = await get_or_create_subscription(session, business)
@@ -113,7 +120,9 @@ async def test_lapsed_period_resets_usage(conversation):
         subscription.period_end = datetime.now(UTC) - timedelta(days=1)
         await session.commit()
 
-    await load_context(_state(business.id, convo.thread_id, "new period", "wamid-usage-rollover"))
+    await load_context(
+        _state(business.id, customer.id, convo.thread_id, "new period", "wamid-usage-rollover")
+    )
 
     async with get_sessionmaker()() as session:
         subscription = await session.get(Subscription, business.id)
