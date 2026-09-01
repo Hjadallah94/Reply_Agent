@@ -50,6 +50,7 @@ async def test_signup_creates_business_and_logs_in(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "accept_terms": "true",
         },
         follow_redirects=False,
     )
@@ -65,6 +66,7 @@ async def test_signup_creates_business_and_logs_in(client):
         )
         assert user is not None
         assert user.business.name == BUSINESS_NAME
+        assert user.accepted_terms_at is not None
 
 
 async def test_signup_rejects_duplicate_email(client):
@@ -74,6 +76,7 @@ async def test_signup_rejects_duplicate_email(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "accept_terms": "true",
         },
         follow_redirects=False,
     )
@@ -85,6 +88,7 @@ async def test_signup_rejects_duplicate_email(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-different-password",
+            "accept_terms": "true",
         },
     )
     assert response.status_code == 400
@@ -94,10 +98,33 @@ async def test_signup_rejects_duplicate_email(client):
 async def test_signup_rejects_short_password(client):
     response = client.post(
         "/signup",
-        data={"business_name": BUSINESS_NAME, "email": SIGNUP_EMAIL, "password": "short"},
+        data={
+            "business_name": BUSINESS_NAME,
+            "email": SIGNUP_EMAIL,
+            "password": "short",
+            "accept_terms": "true",
+        },
     )
     assert response.status_code == 400
     assert "at least 8 characters" in response.text
+
+
+async def test_signup_rejects_missing_accept_terms(client):
+    response = client.post(
+        "/signup",
+        data={
+            "business_name": BUSINESS_NAME,
+            "email": SIGNUP_EMAIL,
+            "password": "a-strong-password",
+        },
+    )
+    assert response.status_code == 400
+    assert "agree to the Terms of Service" in response.text
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        user = await session.scalar(select(User).where(User.email == SIGNUP_EMAIL))
+        assert user is None
 
 
 async def test_login_succeeds_with_correct_credentials(client):

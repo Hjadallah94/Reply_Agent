@@ -253,6 +253,12 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # Doc 3 roadmap (partner meeting 2026-09-01) — recorded at signup once the ToS/Privacy
+    # checkbox is required there; nullable because accounts created before this feature existed
+    # never accepted anything through this flow (grandfathered, not retroactively backfilled).
+    accepted_terms_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -7,6 +7,15 @@
   <label>Business name<input type="text" name="business_name" required autofocus></label>
   <label>Email<input type="email" name="email" required></label>
   <label>Password<input type="password" name="password" minlength="8" required></label>
+  <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; font-weight: normal;">
+    <input type="checkbox" name="accept_terms" value="true" required style="margin-top: 3px;">
+    <span>
+      I agree to the
+      <a href="https://hjadallah94.github.io/Reply_Agent/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a>
+      and
+      <a href="https://hjadallah94.github.io/Reply_Agent/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+    </span>
+  </label>
   <button type="submit">Create account</button>
   <p class="switch">Already have an account? <a href="/login">Log in</a></p>
 </form>

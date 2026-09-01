@@ -4,6 +4,7 @@ for it yet). Session-based via Starlette's signed-cookie middleware (app.py), no
 session table or JWT — simplest thing that actually works for a single-service monolith.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
@@ -31,6 +32,7 @@ async def signup_submit(
     business_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    accept_terms: bool = Form(False),
 ):
     business_name = business_name.strip()
     email = email.strip().lower()
@@ -43,12 +45,25 @@ async def signup_submit(
             status_code=400,
         )
 
+    if not accept_terms:
+        return templates.TemplateResponse(
+            request,
+            "signup.html",
+            {"error": "You must agree to the Terms of Service and Privacy Policy to sign up."},
+            status_code=400,
+        )
+
     async with get_sessionmaker()() as session:
         business = Business(name=business_name, plan_tier=PlanTier.starter)
         session.add(business)
         await session.flush()
 
-        user = User(business_id=business.id, email=email, password_hash=hash_password(password))
+        user = User(
+            business_id=business.id,
+            email=email,
+            password_hash=hash_password(password),
+            accepted_terms_at=datetime.now(UTC),
+        )
         session.add(user)
 
         try:
