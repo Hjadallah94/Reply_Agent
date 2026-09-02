@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ t('billing.heading') }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ t('billing.heading') }}</h1>
+
+{% if subscription.billing_status.value == 'active' %}
+  <div class="card">
+    <div class="row">
+      <strong>{{ t('billing.current_plan_label') }}: {{ subscription.tier.value.capitalize() }}</strong>
+      <span class="badge resolved">{{ t_status(subscription.billing_status.value) }}</span>
+    </div>
+  </div>
+  <p class="muted" style="margin: 14px 0 6px;">{{ t('billing.change_plan_intro') }}</p>
+{% elif subscription.billing_status.value == 'payment_pending' %}
+  <div class="reason">
+    {{ t('billing.pending_intro') }} <strong>{{ subscription.tier.value.capitalize() }}</strong>.
+  </div>
+  <div class="card">
+    <strong>{{ t('billing.payment_instructions_label') }}</strong>
+    {% if payment_instructions %}
+      <p style="margin: 8px 0 0;">{{ payment_instructions }}</p>
+    {% else %}
+      <p class="muted" style="margin: 8px 0 0;">{{ t('billing.instructions_not_configured') }}</p>
+    {% endif %}
+    <p class="muted" style="margin: 10px 0 0;">{{ t('billing.reference_label') }}: <strong>{{ (business.id | string)[:8] }}</strong></p>
+  </div>
+  <p class="muted" style="margin: 14px 0 6px;">{{ t('billing.change_plan_intro') }}</p>
+{% else %}
+  <p class="muted" style="margin: 0 0 14px;">{{ t('billing.trialing_intro') }}</p>
+{% endif %}
+
+<form method="post" action="/businesses/{{ business.id }}/dashboard/billing/request-plan">
+  {% for tier in tiers %}
+  <label class="card" style="display: block; cursor: pointer;">
+    <div class="row">
+      <span>
+        <input type="radio" name="tier" value="{{ tier.value }}" {% if tier.value == subscription.tier.value %}checked{% endif %} required>
+        <strong>{{ tier.label }}</strong>
+        <span class="muted">— {{ tier.price_jod }} {{ t('billing.jod_per_month') }}</span>
+      </span>
+      <span class="muted">{{ tier.message_cap }} {{ t('billing.messages_per_month') }}</span>
+    </div>
+  </label>
+  {% endfor %}
+  <button type="submit">{{ t('billing.request_plan_button') }}</button>
+</form>
+{% endblock %}

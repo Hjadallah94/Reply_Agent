@@ -215,6 +215,38 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "resolve it there",
         "ar": "عالجها من هناك",
     },
+    # --- billing (Doc 3 roadmap, Phase 4: manual/CliQ-style billing) ---
+    "billing.heading": {"en": "Billing", "ar": "الفوترة"},
+    "billing.current_plan_label": {"en": "Current plan", "ar": "الخطة الحالية"},
+    "billing.change_plan_intro": {
+        "en": "Want to change your plan? Pick a new one below.",
+        "ar": "بدك تغيّر خطتك؟ اختار وحدة جديدة تحت.",
+    },
+    "billing.pending_intro": {
+        "en": "We've received your request for",
+        "ar": "استلمنا طلبك لخطة",
+    },
+    "billing.payment_instructions_label": {"en": "Payment instructions", "ar": "تعليمات الدفع"},
+    "billing.instructions_not_configured": {
+        "en": (
+            "Payment details aren't set up yet — contact OptiGnosis directly to complete "
+            "your subscription."
+        ),
+        "ar": "تفاصيل الدفع لسا ما انضبطت — تواصل مع OptiGnosis مباشرة لإكمال اشتراكك.",
+    },
+    "billing.reference_label": {
+        "en": "Reference (include with your transfer)",
+        "ar": "الرقم المرجعي (أرفقه مع تحويلتك)",
+    },
+    "billing.trialing_intro": {
+        "en": "Pick a plan below to get started.",
+        "ar": "اختار خطة تحت عشان تبلش.",
+    },
+    "billing.jod_per_month": {"en": "JOD/mo", "ar": "دينار/شهر"},
+    "billing.messages_per_month": {"en": "messages/mo", "ar": "رسالة/شهر"},
+    "billing.request_plan_button": {"en": "Request this plan", "ar": "اطلب هاي الخطة"},
+    "status.payment_pending": {"en": "Payment pending", "ar": "بانتظار الدفع"},
+    "status.trialing": {"en": "Trial", "ar": "تجريبي"},
     # --- status/badge values (real enums + conventional stock_status values) ---
     "status.auto": {"en": "Auto", "ar": "تلقائي"},
     "status.owner_handled": {"en": "Owner handled", "ar": "بمعالجة المالك"},

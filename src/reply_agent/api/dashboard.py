@@ -26,11 +26,13 @@ from reply_agent.auth.dependencies import (
     get_current_user,
     require_business_access,
 )
+from reply_agent.billing.tiers import MESSAGE_CAPS, TIER_PRICE_JOD
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.config import get_settings
 from reply_agent.db.models import (
     ApprovalRequest,
     ApprovalRequestStatus,
+    BillingStatus,
     Business,
     Conversation,
     ConversationStatus,
@@ -43,6 +45,7 @@ from reply_agent.db.models import (
     Message,
     MessageDirection,
     Order,
+    PlanTier,
     PushSubscription,
 )
 from reply_agent.db.tenant_session import tenant_session
@@ -338,6 +341,56 @@ async def set_away_mode(
         db_business.away_message = away_message.strip() or None
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/billing")
+async def billing_page(request: Request, business: Business = Depends(require_business_access)):
+    async with tenant_session(business.id) as session:
+        subscription = await get_or_create_subscription(session, business)
+
+    tiers = [
+        {
+            "value": tier.value,
+            "label": tier.value.capitalize(),
+            "price_jod": TIER_PRICE_JOD[tier],
+            "message_cap": MESSAGE_CAPS[tier],
+        }
+        for tier in PlanTier
+    ]
+
+    return await _render(
+        request,
+        "billing.html",
+        business=business,
+        subscription=subscription,
+        tiers=tiers,
+        payment_instructions=get_settings().payment_instructions,
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/billing/request-plan")
+async def request_plan(
+    business_id: uuid.UUID,
+    tier: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    try:
+        plan_tier = PlanTier(tier)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid plan tier") from exc
+
+    async with tenant_session(business_id) as session:
+        subscription = await get_or_create_subscription(
+            session, await session.get(Business, business_id)
+        )
+        subscription.tier = plan_tier
+        # Doc 3 roadmap (Phase 4) — deliberately no self-serve "active" here, even when
+        # changing plans from an already-active subscription: a plan change isn't paid for
+        # yet either, so it goes through the same manual-confirmation gate as a first request
+        # (db/models.py's Subscription docstring).
+        subscription.billing_status = BillingStatus.payment_pending
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/billing", status_code=303)
 
 
 CONVERSATIONS_PAGE_SIZE = 50

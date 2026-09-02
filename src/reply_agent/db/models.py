@@ -110,6 +110,10 @@ class BillingStatus(enum.StrEnum):
     active = "active"
     past_due = "past_due"
     canceled = "canceled"
+    # Doc 3 roadmap (Phase 4, manual/CliQ-style billing) — an owner has requested a paid tier
+    # and been shown payment instructions; only a manual DB confirmation (no self-serve button
+    # — see db/models.py's Subscription docstring) flips this to active.
+    payment_pending = "payment_pending"
 
 
 class Business(Base):
@@ -440,6 +444,13 @@ class ApprovalRequest(Base):
 
 
 class Subscription(Base):
+    """billing_status transitions (Doc 3 roadmap, Phase 4 manual/CliQ-style billing):
+    trialing -> payment_pending (owner requests a paid tier, api/dashboard.py's
+    request_plan route) -> active (manual DB confirmation only, once OptiGnosis has actually
+    verified the transfer arrived — deliberately no self-serve "mark my own payment confirmed"
+    button, same reviewed-not-automatic precedent as CustomRule's approval flow).
+    """
+
     __tablename__ = "subscriptions"
 
     business_id: Mapped[uuid.UUID] = mapped_column(

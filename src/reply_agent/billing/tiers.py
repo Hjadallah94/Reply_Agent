@@ -10,6 +10,13 @@ MESSAGE_CAPS: dict[PlanTier, int] = {
     PlanTier.pro: 5000,
 }
 
+# Doc 3 roadmap (Phase 4, manual/CliQ-style billing) — monthly subscription price, JOD.
+TIER_PRICE_JOD: dict[PlanTier, float] = {
+    PlanTier.starter: 10,
+    PlanTier.growth: 25,
+    PlanTier.pro: 45,
+}
+
 # JOD per customer message beyond the cap.
 OVERAGE_RATE_JOD: dict[PlanTier, float] = {
     PlanTier.starter: 0.015,

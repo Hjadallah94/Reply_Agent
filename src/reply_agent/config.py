@@ -69,6 +69,12 @@ class Settings(BaseSettings):
 
     owner_notification_whatsapp_number: str = ""
 
+    # Doc 3 roadmap (Phase 4, manual/CliQ-style billing) — free text (CliQ alias, IBAN, bank
+    # name, whatever's actually needed), shown verbatim on the dashboard's billing page. Left
+    # empty, that page shows an explicit "not configured yet" state instead of a blank/broken
+    # instruction block — same graceful-when-unconfigured convention as every setting above.
+    payment_instructions: str = ""
+
     # This deployment's own public URL (e.g. https://reply-agent-web-staging.onrender.com), no
     # trailing slash — only used to build a push notification's click-through link
     # (notifications/push.py). The existing WhatsApp ping deliberately omits a link (the owner
