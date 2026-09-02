@@ -73,7 +73,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 AMMAN_TZ = ZoneInfo("Asia/Amman")
 
 
-def _render(request: Request, name: str, **context):
+async def _render(request: Request, name: str, **context):
     """Every dashboard template render goes through here (Doc 3 Phase 6.6) so lang/t/t_status
     can never be forgotten on one route — a plain templates.TemplateResponse(...) call would
     silently render English-only chrome regardless of the viewer's language preference.
@@ -85,6 +85,36 @@ def _render(request: Request, name: str, **context):
     context.setdefault("theme", get_theme(request))
     context.setdefault("amman_tz", AMMAN_TZ)
     context.setdefault("vapid_public_key", get_settings().vapid_public_key)
+
+    # Notification bell (Doc 3 roadmap) — a single combined count, visible from every dashboard
+    # page (not just business_dashboard, which already computes the two lists themselves; this
+    # is the one place every other route also passes through). Every route in this file already
+    # passes business=business, so this is effectively "always on" wherever the bell is shown.
+    business = context.get("business")
+    if business is not None and "pending_notifications_count" not in context:
+        async with tenant_session(business.id) as session:
+            pending_escalation_count = await session.scalar(
+                select(func.count())
+                .select_from(Escalation)
+                .join(Conversation)
+                .where(
+                    Conversation.business_id == business.id,
+                    Escalation.status == EscalationStatus.pending,
+                )
+            )
+            pending_approval_count = await session.scalar(
+                select(func.count())
+                .select_from(ApprovalRequest)
+                .join(Conversation)
+                .where(
+                    Conversation.business_id == business.id,
+                    ApprovalRequest.status == ApprovalRequestStatus.pending,
+                )
+            )
+        context["pending_notifications_count"] = (pending_escalation_count or 0) + (
+            pending_approval_count or 0
+        )
+
     return templates.TemplateResponse(request, name, context)
 
 
@@ -283,7 +313,7 @@ async def business_dashboard(
             for c in conversations
         ]
 
-    return _render(
+    return await _render(
         request,
         "dashboard.html",
         business=business,
@@ -351,7 +381,7 @@ async def conversations_list(
         for c in conversations
     ]
     total_pages = max(1, -(-(total or 0) // CONVERSATIONS_PAGE_SIZE))
-    return _render(
+    return await _render(
         request,
         "conversations_list.html",
         business=business,
@@ -402,7 +432,7 @@ async def conversation_detail(
             for m in conversation.messages
         ]
 
-    return _render(
+    return await _render(
         request,
         "conversation.html",
         business=business,
@@ -472,7 +502,7 @@ async def rules_page(request: Request, business: Business = Depends(require_busi
     escalation_rules = business.escalation_rules or {}
     excluded_locations = "\n".join((business.delivery_rules or {}).get("excluded_locations", []))
 
-    return _render(
+    return await _render(
         request,
         "rules.html",
         business=business,
@@ -637,7 +667,7 @@ async def escalation_detail(
             for m in conversation.messages
         ]
 
-    return _render(
+    return await _render(
         request,
         "escalation.html",
         business=business,
@@ -760,7 +790,7 @@ async def approval_detail(
         ]
 
     lang = get_lang(request)
-    return _render(
+    return await _render(
         request,
         "approval.html",
         business=business,
@@ -894,7 +924,7 @@ async def catalog_list(request: Request, business: Business = Depends(require_bu
         ).all()
 
     now = datetime.now(UTC)
-    return _render(
+    return await _render(
         request,
         "catalog.html",
         business=business,
@@ -906,7 +936,7 @@ async def catalog_list(request: Request, business: Business = Depends(require_bu
 
 @router.get("/businesses/{business_id}/dashboard/catalog/products/new")
 async def new_product_form(request: Request, business: Business = Depends(require_business_access)):
-    return _render(
+    return await _render(
         request,
         "product_form.html",
         business=business,
@@ -956,7 +986,7 @@ async def edit_product_form(
     variants_text = "; ".join(
         f"{v['label']}:{v['stock_status']}" for v in document.structured_data.get("variants", [])
     )
-    return _render(
+    return await _render(
         request,
         "product_form.html",
         business=business,
@@ -1013,7 +1043,9 @@ async def delete_product_route(
 async def new_promotion_form(
     request: Request, business: Business = Depends(require_business_access)
 ):
-    return _render(request, "promotion_form.html", business=business, document=None, promotion=None)
+    return await _render(
+        request, "promotion_form.html", business=business, document=None, promotion=None
+    )
 
 
 def _promotion_from_form(
@@ -1065,7 +1097,7 @@ async def edit_promotion_form(
             KnowledgeDocType.promotion,
         )
 
-    return _render(
+    return await _render(
         request,
         "promotion_form.html",
         business=business,

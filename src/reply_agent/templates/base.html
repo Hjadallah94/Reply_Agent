@@ -226,6 +226,23 @@
   }
   .auth-form .switch { font-size: 13.5px; color: var(--text-muted); text-align: center; }
   .header-actions { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+  .bell-link {
+    text-decoration: none;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    font-size: 13.5px;
+    font-weight: 500;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .bell-link:hover { color: var(--text); border-color: var(--accent); }
+  .bell-link.has-pending {
+    color: var(--pending-fg);
+    background: var(--pending-bg);
+    border-color: var(--pending-fg);
+    font-weight: 600;
+  }
   .logout-form button, .lang-form button, .theme-form button, .push-btn {
     margin-top: 0;
     background: none;
@@ -251,6 +268,15 @@
   {% if business %}<span class="biz">— {{ business.name }}</span>{% endif %}
   {% if business %}
   <div class="header-actions">
+    {% if pending_notifications_count is defined %}
+    {# Notification bell (Doc 3 roadmap) — computed by api/dashboard.py's _render() on every
+       dashboard-scoped page, not just the main dashboard, so it's always visible in the
+       persistent header. Jumps to the dashboard's own queue sections rather than opening a
+       separate panel — reuses what's already there instead of a new interactive widget. #}
+    <a class="bell-link {{ 'has-pending' if pending_notifications_count > 0 else '' }}" href="/businesses/{{ business.id }}/dashboard#queues">
+      🔔{% if pending_notifications_count > 0 %} {{ pending_notifications_count }}{% endif %}
+    </a>
+    {% endif %}
     {% if t is defined %}
     {# Only pages rendered through api/dashboard.py's _render() (Doc 3 Phase 6.6) have
        translations at all — the toggle would otherwise flip dir="rtl" on an English-only

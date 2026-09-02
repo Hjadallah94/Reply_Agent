@@ -274,6 +274,41 @@ async def test_set_theme_guards_against_open_redirect(client, escalation):
     assert response.headers["location"] == "/dashboard"
 
 
+# --- Notification bell (Doc 3 roadmap) --------------------------------------------------------
+
+
+async def test_bell_shows_no_count_with_nothing_pending(client):
+    business = await create_logged_in_business(client, "Bell Empty " + BUSINESS_NAME)
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert 'class="bell-link "' in response.text
+    assert 'class="bell-link has-pending"' not in response.text
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        await session.execute(delete(Business).where(Business.id == business.id))
+        await session.commit()
+
+
+async def test_bell_shows_count_with_a_pending_escalation(client, escalation):
+    business, _ = escalation
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    assert 'class="bell-link has-pending"' in response.text
+    assert "🔔 1" in response.text
+
+
+async def test_bell_visible_and_correct_on_a_non_dashboard_page(client, escalation):
+    """The whole point: the bell isn't just computed on business_dashboard's own route — it's
+    in _render() itself, so it shows up (with the right count) on any dashboard-scoped page."""
+    business, _ = escalation
+    response = client.get(f"/businesses/{business.id}/dashboard/rules")
+    assert response.status_code == 200
+    assert 'class="bell-link has-pending"' in response.text
+    assert "🔔 1" in response.text
+    assert f'href="/businesses/{business.id}/dashboard#queues"' in response.text
+
+
 # --- Web Push (Doc 3 Phase 6.6) -------------------------------------------------------------
 
 
