@@ -6,12 +6,15 @@
 <title>{% block title %}Reply Agent{% endblock %}</title>
 <style>
   :root {
-    --bg: #f5f7f6;
+    --bg: #f4f6f7;
     --surface: #ffffff;
-    --border: #dbe3df;
-    --text: #17211d;
-    --text-muted: #5c6b64;
-    --accent: #2a6b58;
+    --border: #d9e1e3;
+    --text: #151f21;
+    --text-muted: #5c6c6f;
+    /* Sampled directly from the OptiGnosis logo's own gradient (optignosis.com) — a deep
+       teal-navy, not a generic corporate navy. Status colors below stay green/amber — those
+       are semantic (pending/resolved), not brand identity, so they don't follow the accent. */
+    --accent: #115662;
     --accent-fg: #ffffff;
     --pending-bg: #f7ecd8;
     --pending-fg: #8a5a1f;
@@ -25,13 +28,13 @@
      theming.py's /set-theme, which stamps data-theme on <html> and always wins over the OS. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #10231b;
-      --surface: #16281f;
-      --border: #29402f;
-      --text: #e7f0ea;
-      --text-muted: #96a89c;
-      --accent: #4fae80;
-      --accent-fg: #0a150e;
+      --bg: #0d1a1e;
+      --surface: #142529;
+      --border: #263c40;
+      --text: #e6eff0;
+      --text-muted: #93a5a7;
+      --accent: #4fa8bd;
+      --accent-fg: #06141a;
       --pending-bg: #3a3120;
       --pending-fg: #e6b767;
       --resolved-bg: #1c3527;
@@ -41,13 +44,13 @@
     }
   }
   :root[data-theme="dark"] {
-    --bg: #10231b;
-    --surface: #16281f;
-    --border: #29402f;
-    --text: #e7f0ea;
-    --text-muted: #96a89c;
-    --accent: #4fae80;
-    --accent-fg: #0a150e;
+    --bg: #0d1a1e;
+    --surface: #142529;
+    --border: #263c40;
+    --text: #e6eff0;
+    --text-muted: #93a5a7;
+    --accent: #4fa8bd;
+    --accent-fg: #06141a;
     --pending-bg: #3a3120;
     --pending-fg: #e6b767;
     --resolved-bg: #1c3527;
