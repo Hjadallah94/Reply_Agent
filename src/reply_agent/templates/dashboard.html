@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ business.name }} — Reply Agent{% endblock %}
 {% block content %}
-<a class="back" href="/dashboard">&larr; {{ t('dashboard.back_all_businesses') }}</a>
 <h1>{{ business.name }}</h1>
-<div class="row" style="justify-content: flex-start; gap: 10px; margin-bottom: 18px;">
+
+<div class="toolbar">
   {% if business.channels_connected.whatsapp %}
     <span class="badge resolved">{{ t('dashboard.whatsapp_connected') }}</span>
   {% else %}
@@ -19,6 +19,8 @@
   {% endif %}
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/catalog">{{ t('dashboard.manage_catalog') }}</a>
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/rules">{{ t('dashboard.manage_rules') }}</a>
+  <a class="export-link" href="/businesses/{{ business.id }}/dashboard/conversations">{{ t('conversations.view_all') }}</a>
+  <a class="export-link" href="/businesses/{{ business.id }}/dashboard/export">{{ t('dashboard.download_excel') }}</a>
 </div>
 
 <div class="card">
@@ -47,74 +49,86 @@
   <p class="muted" style="margin: 6px 0 0;">{{ usage.used }} / {{ usage.cap }} {{ t('dashboard.messages_suffix') }}</p>
 </div>
 
-<h2>{{ t('dashboard.needs_reply_heading') }}</h2>
-{% if pending_escalations %}
-  {% for e in pending_escalations %}
-  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/escalations/{{ e.id }}">
-    <div class="card">
-      <div class="row">
-        <strong>{{ e.customer_handle }}</strong>
-        <span class="badge pending">{{ e.channel }}</span>
-      </div>
-      <p class="muted" style="margin: 6px 0 0;">{{ e.reason }}</p>
+<div class="board">
+  <div class="board-col">
+    <h2>{{ t('dashboard.needs_reply_heading') }}</h2>
+    <div class="board-col-list">
+      {% if pending_escalations %}
+        {% for e in pending_escalations %}
+        <a class="card-link" href="/businesses/{{ business.id }}/dashboard/escalations/{{ e.id }}">
+          <div class="card">
+            <div class="row">
+              <strong>{{ e.customer_handle }}</strong>
+              <span class="badge pending">{{ e.channel }}</span>
+            </div>
+            <p class="muted" style="margin: 6px 0 0;">{{ e.reason }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <p class="empty">{{ t('dashboard.needs_reply_empty') }}</p>
+      {% endif %}
     </div>
-  </a>
-  {% endfor %}
-{% else %}
-  <p class="empty">{{ t('dashboard.needs_reply_empty') }}</p>
-{% endif %}
-
-<h2 style="margin: 28px 0 10px;">{{ t('dashboard.needs_approval_heading') }}</h2>
-{% if pending_approvals %}
-  {% for a in pending_approvals %}
-  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/approvals/{{ a.id }}">
-    <div class="card">
-      <div class="row">
-        <strong>{{ a.customer_handle }}</strong>
-        <span class="badge pending">{{ a.channel }}</span>
-      </div>
-      <p class="muted" style="margin: 6px 0 0;">{{ a.reasoning }}</p>
-    </div>
-  </a>
-  {% endfor %}
-{% else %}
-  <p class="empty">{{ t('dashboard.needs_approval_empty') }}</p>
-{% endif %}
-
-{% if recent_auto_approvals %}
-<h2 style="margin: 28px 0 10px;">{{ t('dashboard.auto_approved_heading') }}</h2>
-<p class="muted" style="margin: 0 0 12px;">{{ t('dashboard.auto_approved_subtitle') }}</p>
-  {% for a in recent_auto_approvals %}
-  <div class="card row">
-    <div>
-      <strong>{{ a.customer_handle }}</strong>
-      <p class="muted" style="margin: 4px 0 0;">{{ a.estimated_window }} {{ t('dashboard.delivery_word') }} — {{ a.resolution_time }}</p>
-    </div>
-    <span class="badge resolved">{{ a.channel }}</span>
   </div>
-  {% endfor %}
-{% endif %}
 
-<div class="row" style="align-items: baseline;">
-  <h2 style="margin: 28px 0 10px;">{{ t('dashboard.recent_conversations_heading') }}</h2>
-  <div class="row" style="width: auto; gap: 14px;">
-    <a class="export-link" href="/businesses/{{ business.id }}/dashboard/conversations">{{ t('conversations.view_all') }}</a>
-    <a class="export-link" href="/businesses/{{ business.id }}/dashboard/export">{{ t('dashboard.download_excel') }}</a>
+  <div class="board-col">
+    <h2>{{ t('dashboard.needs_approval_heading') }}</h2>
+    <div class="board-col-list">
+      {% if pending_approvals %}
+        {% for a in pending_approvals %}
+        <a class="card-link" href="/businesses/{{ business.id }}/dashboard/approvals/{{ a.id }}">
+          <div class="card">
+            <div class="row">
+              <strong>{{ a.customer_handle }}</strong>
+              <span class="badge pending">{{ a.channel }}</span>
+            </div>
+            <p class="muted" style="margin: 6px 0 0;">{{ a.reasoning }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <p class="empty">{{ t('dashboard.needs_approval_empty') }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if recent_auto_approvals %}
+  <div class="board-col">
+    <h2>{{ t('dashboard.auto_approved_heading') }}</h2>
+    <p class="muted subtitle">{{ t('dashboard.auto_approved_subtitle') }}</p>
+    <div class="board-col-list">
+      {% for a in recent_auto_approvals %}
+      <div class="card row">
+        <div>
+          <strong>{{ a.customer_handle }}</strong>
+          <p class="muted" style="margin: 4px 0 0;">{{ a.estimated_window }} {{ t('dashboard.delivery_word') }} — {{ a.resolution_time }}</p>
+        </div>
+        <span class="badge resolved">{{ a.channel }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="board-col">
+    <h2>{{ t('dashboard.recent_conversations_heading') }}</h2>
+    <div class="board-col-list">
+      {% if conversations %}
+        {% for c in conversations %}
+        <a class="card-link" href="/businesses/{{ business.id }}/dashboard/conversations/{{ c.id }}">
+          <div class="card row">
+            <div>
+              <strong>{{ c.customer_handle }}</strong>
+              <p class="muted" style="margin: 4px 0 0;">{{ c.last_message_text or "—" }}</p>
+            </div>
+            <span class="badge {{ c.status }}">{{ t_status(c.status) }}</span>
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <p class="empty">{{ t('dashboard.no_conversations') }}</p>
+      {% endif %}
+    </div>
   </div>
 </div>
-{% if conversations %}
-  {% for c in conversations %}
-  <a class="card-link" href="/businesses/{{ business.id }}/dashboard/conversations/{{ c.id }}">
-    <div class="card row">
-      <div>
-        <strong>{{ c.customer_handle }}</strong>
-        <p class="muted" style="margin: 4px 0 0;">{{ c.last_message_text or "—" }}</p>
-      </div>
-      <span class="badge {{ c.status }}">{{ t_status(c.status) }}</span>
-    </div>
-  </a>
-  {% endfor %}
-{% else %}
-  <p class="empty">{{ t('dashboard.no_conversations') }}</p>
-{% endif %}
 {% endblock %}

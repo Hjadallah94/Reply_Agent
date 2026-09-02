@@ -227,6 +227,53 @@ async def test_set_language_guards_against_open_redirect(client, escalation):
     assert response.headers["location"] == "/dashboard"
 
 
+# --- Theme toggle (Doc 3 roadmap, dashboard redesign) -----------------------------------------
+
+
+async def test_set_theme_to_dark_persists_and_stamps_data_theme(client, escalation):
+    business, _ = escalation
+    response = client.post(
+        "/set-theme",
+        data={"theme": "dark", "next": f"/businesses/{business.id}/dashboard"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+
+    await dispose_engines()
+    dashboard_response = client.get(f"/businesses/{business.id}/dashboard")
+    assert dashboard_response.status_code == 200
+    # The CSS's own dark-mode selector (`[data-theme="dark"]`) always contains this substring
+    # regardless of the actual theme — only the <html> tag's own attribute proves this worked.
+    opening_html_tag = dashboard_response.text.split("<html", 1)[1].split(">", 1)[0]
+    assert 'data-theme="dark"' in opening_html_tag
+
+
+async def test_theme_defaults_to_no_data_theme_attribute(client, escalation):
+    business, _ = escalation
+    response = client.get(f"/businesses/{business.id}/dashboard")
+    assert response.status_code == 200
+    # The CSS itself references "data-theme" in selectors — only the <html> tag's own
+    # attribute matters here, not the substring appearing anywhere on the page.
+    opening_html_tag = response.text.split("<html", 1)[1].split(">", 1)[0]
+    assert "data-theme=" not in opening_html_tag
+
+
+async def test_set_theme_rejects_unsupported_theme(client, escalation):
+    response = client.post("/set-theme", data={"theme": "sepia", "next": "/dashboard"})
+    assert response.status_code == 400
+
+
+async def test_set_theme_guards_against_open_redirect(client, escalation):
+    response = client.post(
+        "/set-theme",
+        data={"theme": "dark", "next": "https://evil.example.com/phish"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/dashboard"
+
+
 # --- Web Push (Doc 3 Phase 6.6) -------------------------------------------------------------
 
 

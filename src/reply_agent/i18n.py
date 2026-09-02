@@ -17,6 +17,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --- base.html ---
     "base.logout": {"en": "Log out", "ar": "تسجيل الخروج"},
     "base.enable_notifications": {"en": "Enable notifications", "ar": "تفعيل الإشعارات"},
+    # Theme toggle (Doc 3 roadmap, dashboard redesign) — label always shows the CURRENT state,
+    # clicking advances to the next one in theming.py's THEME_OPTIONS cycle.
+    "base.theme_system": {"en": "Auto", "ar": "تلقائي"},
+    "base.theme_light": {"en": "Light", "ar": "فاتح"},
+    "base.theme_dark": {"en": "Dark", "ar": "داكن"},
     # --- dashboard.html ---
     "dashboard.back_all_businesses": {"en": "All businesses", "ar": "جميع الأعمال"},
     "dashboard.whatsapp_connected": {"en": "WhatsApp connected", "ar": "واتساب متصل"},

@@ -63,6 +63,7 @@ from reply_agent.knowledge.catalog import (
 from reply_agent.knowledge.corrections import record_owner_correction
 from reply_agent.knowledge.schema import Product, Promotion
 from reply_agent.knowledge.spreadsheet_ingest import parse_variants
+from reply_agent.theming import THEME_OPTIONS, get_theme
 
 router = APIRouter(tags=["dashboard"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -81,6 +82,7 @@ def _render(request: Request, name: str, **context):
     context.setdefault("lang", lang)
     context.setdefault("t", partial(t, lang))
     context.setdefault("t_status", partial(t_status, lang))
+    context.setdefault("theme", get_theme(request))
     context.setdefault("amman_tz", AMMAN_TZ)
     context.setdefault("vapid_public_key", get_settings().vapid_public_key)
     return templates.TemplateResponse(request, name, context)
@@ -163,6 +165,16 @@ async def set_language(request: Request, lang: str = Form(...), next: str = Form
     # absolute or protocol-relative URL a malicious `next` value could point elsewhere.
     safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
     request.session["lang"] = lang
+    return RedirectResponse(url=safe_next, status_code=303)
+
+
+@router.post("/set-theme")
+async def set_theme(request: Request, theme: str = Form(...), next: str = Form("/dashboard")):
+    if theme not in THEME_OPTIONS:
+        raise HTTPException(status_code=400, detail="Unsupported theme")
+    # Same open-redirect guard as /set-language above.
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
+    request.session["theme"] = theme
     return RedirectResponse(url=safe_next, status_code=303)
 
 
