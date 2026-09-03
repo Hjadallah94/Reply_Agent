@@ -101,5 +101,10 @@ async def generate_response(state: GraphState) -> dict:
             "text": reply_text,
             "cited_sources": [c["source"] for c in retrieved_context],
             "model_used": model,
-        }
+        },
+        # Doc 3 roadmap (order confirmation follow-up) — carried into state so
+        # update_memory.py knows, once this send actually happens, whether it was a
+        # confirmation-request draft (needing the nudge job scheduled) without recomputing
+        # this same condition itself.
+        "require_order_confirmation": require_order_confirmation,
     }

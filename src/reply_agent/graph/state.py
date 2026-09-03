@@ -125,5 +125,10 @@ class GraphState(TypedDict):
     pending_order: NotRequired[PendingOrder | None]
     order_confirmation_decision: NotRequired[Literal["confirmed", "declined", "unclear"]]
     escalation_override_reason: NotRequired[str]
+    # Doc 3 roadmap (order confirmation follow-up) — set by generate_response.py, read by
+    # update_memory.py: this send (if it happens) is a confirmation-request draft, not a final
+    # answer, so update_memory.py should stamp Order.confirmation_sent_at and schedule the
+    # nudge job once it actually sends.
+    require_order_confirmation: NotRequired[bool]
 
     retrieval_attempts: NotRequired[int]

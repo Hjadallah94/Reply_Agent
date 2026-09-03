@@ -13,8 +13,21 @@ Run with: uv run rq worker inbound_messages
 import asyncio
 import logging
 import sys
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import select
 
 from reply_agent.channels.common import NormalizedInboundEvent
+from reply_agent.db.models import (
+    ChannelType,
+    Conversation,
+    Customer,
+    Message,
+    MessageDirection,
+    Order,
+    OrderConfirmationStatus,
+)
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.context_resolution import (
@@ -23,9 +36,20 @@ from reply_agent.graph.context_resolution import (
     get_or_create_customer,
 )
 from reply_agent.graph.graph import run_graph
+from reply_agent.graph.nodes.send_reply import send_reply
 from reply_agent.graph.state import GraphState
 
 logger = logging.getLogger(__name__)
+
+# Doc 3 roadmap (order confirmation follow-up) — bilingual by default, same reasoning as
+# send_away_reply.py's DEFAULT_AWAY_MESSAGE: this fires with no live conversation turn to match
+# the customer's language against.
+DEFAULT_CONFIRMATION_NUDGE = (
+    'ولسا ما اكدتلنا طلبك؟ إذا كل شي تمام معك بالطلب يلي حكينا عنه، اكتبلنا "أيوه" أو "تمام" '
+    "وبنكمله، أو خبرنا شو بدك تغيّر.\n"
+    'Just checking in — does the order we discussed look right to you? Reply "yes" to confirm, '
+    "or let us know what to change."
+)
 
 # psycopg's async driver (used by AsyncPostgresSaver, the LangGraph checkpointer) doesn't
 # support Windows' default ProactorEventLoop — only SelectorEventLoop. Must be set before any
@@ -81,6 +105,77 @@ async def _process_inbound_message_async(payload: dict) -> None:
     await run_graph(initial_state, thread_id=thread_id)
 
 
+async def _send_order_confirmation_nudge_async(order_id: str) -> None:
+    """Doc 3 roadmap (order confirmation follow-up) — a delayed RQ job (queue/tasks.py's
+    enqueue_order_confirmation_nudge), not a graph node: nothing here runs through LangGraph or
+    touches GraphState, it operates directly on one Order row hours after the fact.
+    """
+    order_uuid = uuid.UUID(order_id)
+
+    # Not tenant-scoped yet — business_id isn't known until this first, plain read (same
+    # reasoning as _process_inbound_message_async's own initial business lookup above).
+    async with get_sessionmaker()() as session:
+        order = await session.get(Order, order_uuid)
+
+    if order is None:
+        logger.warning("Order confirmation nudge: order %s no longer exists", order_id)
+        return
+    if order.confirmation_status != OrderConfirmationStatus.pending:
+        # Customer already replied (confirmed/declined/unclear) since this was scheduled —
+        # nothing to nudge.
+        return
+    if order.confirmation_nudge_sent_at is not None:
+        # Idempotency guard — confirmation_status deliberately stays "pending" after a nudge
+        # (never auto-cancel/escalate), so it alone can't signal "already nudged."
+        return
+
+    async with tenant_session(order.business_id) as session:
+        # Only WhatsApp customers are phone-identified (same convention as
+        # retrieve_knowledge.py's order-status lookup) — Instagram/Messenger handles are
+        # opaque IGSID/PSIDs, not phone numbers, so they'd never coincidentally match anyway.
+        customer = await session.scalar(
+            select(Customer).where(
+                Customer.business_id == order.business_id,
+                Customer.channel == ChannelType.whatsapp,
+                Customer.channel_handle == order.customer_phone,
+            )
+        )
+        if customer is None:
+            logger.warning(
+                "Order confirmation nudge: no WhatsApp customer found for order %s", order_id
+            )
+            return
+        conversation = await session.scalar(
+            select(Conversation).where(Conversation.customer_id == customer.id)
+        )
+        if conversation is None:
+            logger.warning("Order confirmation nudge: no conversation found for order %s", order_id)
+            return
+
+        await send_reply(
+            {
+                "channel": conversation.channel.value,
+                "business_id": str(order.business_id),
+                "thread_id": conversation.thread_id,
+                "draft_reply": {"text": DEFAULT_CONFIRMATION_NUDGE},
+            }
+        )
+
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.outbound,
+                text=DEFAULT_CONFIRMATION_NUDGE,
+                model_used="order-confirmation-nudge",
+            )
+        )
+
+        # Re-fetch inside this session — `order` above was loaded in a different (non-tenant)
+        # session and can't be mutated directly here.
+        order_in_session = await session.get(Order, order_uuid)
+        order_in_session.confirmation_nudge_sent_at = datetime.now(UTC)
+
+
 # scripts/run_worker.py's SimpleWorker calls process_inbound_message synchronously, once per
 # job, in the same process for its whole lifetime (chosen specifically because Windows can't
 # fork). asyncio.run() creates and closes a fresh event loop every call — but db/session.py's
@@ -102,3 +197,12 @@ def _get_worker_loop() -> asyncio.AbstractEventLoop:
 
 def process_inbound_message(payload: dict) -> None:
     _get_worker_loop().run_until_complete(_process_inbound_message_async(payload))
+
+
+def send_order_confirmation_nudge(order_id: str) -> None:
+    """RQ job entrypoint for queue/tasks.py's enqueue_order_confirmation_nudge — reuses the
+    same persistent worker-lifetime event loop as process_inbound_message, for the same reason
+    (see the comment above _worker_loop): the DB engines are @lru_cache'd for the process's
+    whole lifetime and stay bound to whichever loop first touched them.
+    """
+    _get_worker_loop().run_until_complete(_send_order_confirmation_nudge_async(order_id))

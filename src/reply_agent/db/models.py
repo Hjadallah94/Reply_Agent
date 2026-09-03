@@ -231,6 +231,21 @@ class Order(Base):
     confirmation_status: Mapped[OrderConfirmationStatus | None] = mapped_column(
         Enum(OrderConfirmationStatus, name="order_confirmation_status"), nullable=True
     )
+    # Doc 3 roadmap (order confirmation follow-up nudge) — set the moment the confirmation-
+    # request draft is actually sent (graph/nodes/update_memory.py), not when this row is
+    # created (estimate_delivery.py creates it earlier, before self_check/confidence_router
+    # have decided whether that draft actually reaches the customer or escalates instead).
+    # Also the base the delayed nudge job schedules itself from (queue/tasks.py).
+    confirmation_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Idempotency guard for the nudge job (worker.py) — confirmation_status deliberately stays
+    # "pending" after a nudge (the plan: leave it pending if still no reply, never auto-cancel/
+    # escalate), so confirmation_status alone can't tell the job "already nudged, don't send a
+    # second one." Set once, the first (and only) time a nudge actually sends.
+    confirmation_nudge_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
