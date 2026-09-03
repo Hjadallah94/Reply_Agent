@@ -37,3 +37,8 @@ Thumbs.db
 
 # App Review screencasts / local recordings — not source, not for version control
 Media/
+
+# Rough personal meeting notes — not a project deliverable (unlike docx/01-05_*.docx, which
+# are tracked), and prone to having secrets pasted into it during a live call. Never committed
+# so far (verified via `git log --all -- docx/Notes.docx`).
+docx/Notes.docx
