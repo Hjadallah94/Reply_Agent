@@ -20,7 +20,11 @@ from reply_agent.auth.dependencies import ensure_business_access, require_busine
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
 from reply_agent.db.tenant_session import tenant_session
-from reply_agent.onboarding.meta_oauth import EmbeddedSignupError, exchange_code_for_token
+from reply_agent.onboarding.meta_oauth import (
+    EmbeddedSignupError,
+    exchange_code_for_token,
+    get_authorizing_user_id,
+)
 from reply_agent.onboarding.page_signup import (
     get_linked_instagram_account_id,
     get_single_page_id,
@@ -67,6 +71,10 @@ async def whatsapp_signup_callback(request: Request, payload: EmbeddedSignupPayl
             token = await exchange_code_for_token(payload.code)
             await subscribe_app_to_waba(payload.waba_id, token)
             await register_phone_number(payload.phone_number_id, token)
+            # Doc 3 roadmap — captured so api/meta_compliance.py's deauthorize/data-deletion
+            # callbacks can actually find and act on this business later; they only ever
+            # receive this same Facebook user id, never a business_id.
+            business.facebook_user_id = await get_authorizing_user_id(token)
         except EmbeddedSignupError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -113,6 +121,10 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
             page_id = await get_single_page_id(token)
             instagram_account_id = await get_linked_instagram_account_id(page_id, token)
             await subscribe_page_to_app(page_id, token)
+            # Same reasoning as whatsapp_signup_callback above — overwrites whatever WhatsApp
+            # signup stored if a different Facebook account ran this flow (accepted MVP
+            # limitation, see db/models.py's Business.facebook_user_id docstring).
+            business.facebook_user_id = await get_authorizing_user_id(token)
         except EmbeddedSignupError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 

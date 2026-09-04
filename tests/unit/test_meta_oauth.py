@@ -2,7 +2,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from reply_agent.onboarding.meta_oauth import EmbeddedSignupError, exchange_code_for_token
+from reply_agent.onboarding.meta_oauth import (
+    EmbeddedSignupError,
+    exchange_code_for_token,
+    get_authorizing_user_id,
+)
 
 
 def _response(status_code=200, json_body=None, text=""):
@@ -37,3 +41,19 @@ async def test_exchange_code_for_token_raises_on_error():
         pytest.raises(EmbeddedSignupError),
     ):
         await exchange_code_for_token("bad-code")
+
+
+async def test_get_authorizing_user_id_returns_the_facebook_user_id():
+    response = _response(200, {"id": "fb-user-123", "name": "Test Seller"})
+    with patch("httpx.AsyncClient", return_value=_mock_async_client(response)):
+        user_id = await get_authorizing_user_id("some-token")
+    assert user_id == "fb-user-123"
+
+
+async def test_get_authorizing_user_id_raises_on_error():
+    response = _response(401, text="invalid token")
+    with (
+        patch("httpx.AsyncClient", return_value=_mock_async_client(response)),
+        pytest.raises(EmbeddedSignupError),
+    ):
+        await get_authorizing_user_id("bad-token")

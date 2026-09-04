@@ -59,6 +59,10 @@ async def test_callback_saves_channels_connected(client, business):
             "reply_agent.api.onboarding.subscribe_app_to_waba", new=AsyncMock()
         ) as mock_subscribe,
         patch("reply_agent.api.onboarding.register_phone_number", new=AsyncMock()) as mock_register,
+        patch(
+            "reply_agent.api.onboarding.get_authorizing_user_id",
+            new=AsyncMock(return_value="fb-user-123"),
+        ),
     ):
         response = client.post(
             "/onboarding/whatsapp/callback",
@@ -83,6 +87,7 @@ async def test_callback_saves_channels_connected(client, business):
             "phone_number_id": "phone-123",
             "waba_id": "waba-456",
         }
+        assert refreshed.facebook_user_id == "fb-user-123"
 
 
 async def test_callback_404s_for_unknown_business(client, business):
@@ -138,6 +143,10 @@ async def test_page_callback_saves_messenger_and_instagram(client, business):
         patch(
             "reply_agent.api.onboarding.subscribe_page_to_app", new=AsyncMock()
         ) as mock_subscribe,
+        patch(
+            "reply_agent.api.onboarding.get_authorizing_user_id",
+            new=AsyncMock(return_value="fb-user-456"),
+        ),
     ):
         response = client.post(
             "/onboarding/page/callback",
@@ -154,6 +163,7 @@ async def test_page_callback_saves_messenger_and_instagram(client, business):
         refreshed = await session.get(Business, business.id)
         assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
         assert refreshed.channels_connected["instagram"] == {"page_id": "page-123"}
+        assert refreshed.facebook_user_id == "fb-user-456"
 
 
 async def test_page_callback_skips_instagram_when_not_linked(client, business):
@@ -171,6 +181,10 @@ async def test_page_callback_skips_instagram_when_not_linked(client, business):
             new=AsyncMock(return_value=None),
         ),
         patch("reply_agent.api.onboarding.subscribe_page_to_app", new=AsyncMock()),
+        patch(
+            "reply_agent.api.onboarding.get_authorizing_user_id",
+            new=AsyncMock(return_value="fb-user-789"),
+        ),
     ):
         response = client.post(
             "/onboarding/page/callback",

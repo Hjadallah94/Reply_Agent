@@ -36,3 +36,22 @@ async def exchange_code_for_token(code: str) -> str:
         raise EmbeddedSignupError(f"Code exchange failed ({response.status_code}): {response.text}")
     logger.info("Embedded signup: exchanged code for a business token")
     return response.json()["access_token"]
+
+
+async def get_authorizing_user_id(token: str) -> str:
+    """The Facebook user id who granted this login — api/onboarding.py stores it on the
+    Business row so api/meta_compliance.py's deauthorize/data-deletion callbacks (which only
+    ever receive this same user_id, never a business_id) can actually find and act on the
+    right business, instead of only logging the event for manual follow-up.
+    """
+    settings = get_settings()
+    url = f"https://graph.facebook.com/{settings.meta_graph_api_version}/me"
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+    if response.status_code >= 400:
+        raise EmbeddedSignupError(
+            f"Fetching the authorizing user's id failed ({response.status_code}): {response.text}"
+        )
+    return response.json()["id"]

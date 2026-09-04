@@ -122,6 +122,14 @@ class Business(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     name: Mapped[str] = mapped_column(Text, nullable=False)
     channels_connected: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # The Facebook user who completed the self-serve WhatsApp/Page signup (onboarding/
+    # meta_oauth.py's get_authorizing_user_id) — never set for manually-onboarded businesses.
+    # Meta's deauthorize/data-deletion platform callbacks (api/meta_compliance.py) only ever
+    # receive this same id, never a business_id, so without it those callbacks can't act on
+    # anything. Not unique: whichever signup flow ran last wins if a business somehow used two
+    # different Facebook accounts for WhatsApp vs. Page login — an accepted MVP limitation
+    # (Doc 1's target seller is solo/small, one person doing both).
+    facebook_user_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     plan_tier: Mapped[PlanTier] = mapped_column(
         Enum(PlanTier, name="plan_tier"), nullable=False, default=PlanTier.starter
     )
@@ -163,6 +171,8 @@ class Business(Base):
     users: Mapped[list["User"]] = relationship(
         back_populates="business", cascade="all, delete-orphan"
     )
+
+    __table_args__ = (Index("ix_businesses_facebook_user_id", "facebook_user_id"),)
 
 
 class KnowledgeDocument(Base):
