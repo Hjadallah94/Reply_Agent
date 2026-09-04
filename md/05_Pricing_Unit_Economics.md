@@ -38,21 +38,21 @@ Three cost lines make up almost all of the variable cost per customer: the LLM p
 
 ### 3.1 LLM provider cost (Claude)
 
-Per Doc 2, Section 3.3, each customer message triggers up to four model calls in the LangGraph pipeline: intent classification, response generation (Haiku for ~85% of turns, Sonnet for the harder ~15%), and a self-check. Using Anthropic's published per-token pricing:
+Per Doc 2, Section 3.3, each customer message triggers up to four model calls in the LangGraph pipeline: intent classification, response generation (Haiku for ~85% of turns, Sonnet for the harder ~15%), and a self-check. Using Anthropic's standard published per-token pricing (Sonnet 5's introductory $2/$10 rate expired August 31, 2026; the figures below use its standard $3/$15 rate, so this is the number to build against going forward):
 
 | Model | Input | Output |
 |---|---|---|
 | Claude Haiku 4.5 | $1.00 / million tokens | $5.00 / million tokens |
-| Claude Sonnet 5 | $2.00 / million tokens | $10.00 / million tokens |
+| Claude Sonnet 5 | $3.00 / million tokens | $15.00 / million tokens |
 
 | Pipeline step | Model | Approx. tokens (in / out) | Cost per message |
 |---|---|---|---|
 | classify_intent | Haiku | 200 / 20 | $0.0003 |
 | self_check | Haiku | 250 / 20 | $0.00035 |
-| generate_response | Haiku (85%) / Sonnet (15%) blended | 1,500 / 100 | $0.0023 |
-| **Total (blended)** | — | — | **≈ $0.003 per customer message** |
+| generate_response | Haiku (85%) / Sonnet (15%) blended | 1,500 / 100 | $0.0026 |
+| **Total (blended)** | — | — | **≈ $0.00325 per customer message** |
 
-This is a conservative, uncached estimate. In practice, prompt caching (Doc 2, Section 3.3) reuses the system prompt and knowledge-base context across turns in the same conversation at **10% of the normal input price** on a cache hit, which typically pulls the real blended cost below the $0.003 figure used here — meaning the numbers in this document understate the actual margin.
+This is a conservative, uncached estimate. In practice, prompt caching (Doc 2, Section 3.3) reuses the system prompt and knowledge-base context across turns in the same conversation at **10% of the normal input price** on a cache hit, which typically pulls the real blended cost below the $0.00325 figure used here — meaning the numbers in this document understate the actual margin.
 
 ### 3.2 Meta channel cost (WhatsApp, Instagram, Messenger)
 
@@ -76,19 +76,27 @@ Card/subscription payment gateways typically charge 2.5–3.5% of the transactio
 
 Hosting, the Postgres+pgvector database, the queue, and observability tooling (Doc 2, Section 6) are a shared, largely fixed monthly cost that gets cheaper per customer as the customer base grows — the normal SaaS pattern. At pilot scale this is estimated at roughly $200/month total, growing gradually (not linearly) with usage. A small marginal per-tenant allocation (storage, compute) is included in the tables below for completeness.
 
+### 3.5 Google Maps / distance-estimation cost (pending — V2 expansion)
+
+Doc 1, Section 9 and Doc 2, Section 9 describe a planned expansion using the Google Maps Distance Matrix API for live delivery-time estimation. This is a new, deliberately not-yet-priced cost line — left out of Section 4's unit economics until the feature's actual call pattern is concrete enough to cost accurately. Before finalizing V2 pricing:
+
+- Get Google's current Distance Matrix (or Routes) API pricing directly from Google's own pricing page, not assumed from this document.
+- Estimate real call volume per customer message that actually needs a delivery estimate (not every message needs one — only delivery-related requests within the relevant flow).
+- Re-run Section 4's unit economics with this added as a new line, sourced the same way every other cost line in this document is — from current, verified pricing.
+
 ## 4. Full Unit Economics per Tier
 
 Costs below are calculated at full message-cap utilization — the conservative, worst-case scenario for margin. Most customers won't use their full cap every month, so real margins will typically run higher than shown here.
 
 | | Starter (10 JOD / $14.10, 400 msgs) | Growth (25 JOD / $35.25, 1,500 msgs) | Pro (45 JOD / $63.45, 5,000 msgs) |
 |---|---|---|---|
-| LLM cost | $1.20 | $4.50 | $15.00 |
+| LLM cost | $1.30 | $4.88 | $16.25 |
 | Meta channel fees | $0.30 | $0.50 | $1.00 |
 | Payment processing (3%) | $0.42 | $1.06 | $1.90 |
 | Marginal infra allocation | $0.50 | $0.75 | $1.25 |
-| **Total variable cost** | **$2.42** | **$6.81** | **$19.15** |
-| **Contribution margin** | **$11.68** | **$28.44** | **$44.30** |
-| Contribution margin % | ≈ 83% | ≈ 81% | ≈ 70% |
+| **Total variable cost** | **$2.52** | **$7.19** | **$20.40** |
+| **Contribution margin** | **$11.58** | **$28.06** | **$43.05** |
+| Contribution margin % | ≈ 82% | ≈ 80% | ≈ 68% |
 
 The Pro tier's margin percentage is lower mainly because it's the only tier carrying real, intentional Meta messaging fees (the proactive utility messages) — the underlying reply-agent economics are consistent across all three tiers.
 
@@ -98,13 +106,13 @@ Assume a $220/month fixed platform baseline (Section 3.4) and an early customer 
 
 | Tier | Mix | Contribution margin | Weighted contribution |
 |---|---|---|---|
-| Starter | 60% | $11.68 | $7.01 |
-| Growth | 30% | $28.44 | $8.53 |
-| Pro | 10% | $44.30 | $4.43 |
-| **Blended average per customer** | — | — | **≈ $19.97** |
+| Starter | 60% | $11.58 | $6.95 |
+| Growth | 30% | $28.06 | $8.42 |
+| Pro | 10% | $43.05 | $4.31 |
+| **Blended average per customer** | — | — | **≈ $19.68** |
 
 > **Break-even point**
-> $220 fixed cost ÷ ≈ $20 blended contribution margin per customer ≈ **11 paying customers** to cover the fixed platform cost.
+> $220 fixed cost ÷ ≈ $20 blended contribution margin per customer ≈ **12 paying customers** to cover the fixed platform cost.
 > Doc 1's own pilot target (15–25 paying customers, Section 5) would already put the business past break-even on infrastructure — everything beyond that is close to pure contribution margin, since the cost base barely grows with each additional customer.
 
 ## 6. Sensitivity — What Could Change This
@@ -116,13 +124,14 @@ Assume a $220/month fixed platform baseline (Section 3.4) and an early customer 
 | LLM prices drop further (the historical trend for both Anthropic and OpenAI). | Improves margin further; no action needed beyond periodically revisiting model routing (Doc 2, Section 3.3) to take advantage. | — |
 | Payment gateway fee is higher than the 3% assumption for the chosen local provider. | Slightly compresses margin (roughly $0.15–0.30/customer/month at the assumed volumes). | Confirm actual gateway fee during vendor selection (Doc 3, Phase 4) and re-run this table before finalizing prices. |
 | Willingness to pay in Jordan is lower than 10 JOD in practice. | Directly affects revenue. | Validate with the paid pilot (Doc 3, Phase 5; Doc 4, Section 3) before committing to final public pricing — treat these numbers as a hypothesis. |
+| V2's Google Maps cost line (Section 3.5) is still unpriced. | Section 4's margins do not yet reflect the V2 expansion's added cost — they'll compress somewhat once it's included. | Price it before launching V2 features, not after; re-run Section 4 with the new line before changing any tier price or cap. |
 
 ## 7. Why 10 JOD, Specifically
 
 - **It undercuts the closest priced comparables once converted.** Teammates.ai's cheapest paid tier is $25/mo; The Whatbot (WhatsApp-only) is $29/mo. Wittify AI's entry credit tier (≈33 AED) converts to roughly $9 — the nearest real comparable — putting 10 JOD ($14.10) in a defensible, still-affordable position just above it while covering three channels instead of one.
 - **It sits far below the Gulf-agency price band.** HalaFlow's cheapest tier (199 AED) converts to roughly $54/mo — nearly 4x the Starter price here — reflecting UAE purchasing power that doesn't match a Jordanian solo seller's budget (Doc 1, Section 2.1).
 - **It's a psychologically easy "yes."** 10 JOD a month is roughly the cost of a single boosted Instagram post or a couple of coffees for many sellers — priced low enough to be an impulse decision rather than a budget conversation, consistent with the "self-serve, no sales call" design principle in Doc 1.
-- **It is genuinely profitable, not a loss-leader.** Section 4 shows an ≈83% contribution margin on the Starter tier even at full cap usage. That's only possible because, for this specific use case, the two cost lines that usually make cheap AI products unprofitable — expensive per-message platform fees and expensive frontier-model calls — are both structurally small here: Meta's core messaging is free by design (Section 3.2) and a classification/self-check pipeline lets most turns run on the cheap model (Section 3.1).
+- **It is genuinely profitable, not a loss-leader.** Section 4 shows an ≈82% contribution margin on the Starter tier even at full cap usage. That's only possible because, for this specific use case, the two cost lines that usually make cheap AI products unprofitable — expensive per-message platform fees and expensive frontier-model calls — are both structurally small here: Meta's core messaging is free by design (Section 3.2) and a classification/self-check pipeline lets most turns run on the cheap model (Section 3.1).
 - **It's round and memorable for word-of-mouth marketing** ("10 dinars a month") — directly supporting the community/referral-driven acquisition strategy in Doc 4.
 
 ## 8. Future Pricing Evolution
