@@ -6,13 +6,17 @@ straight at our own /webhooks/whatsapp endpoint, so no real phone or real Meta t
 
 Defaults to Amman Cookie Co's phone_number_id ("demo-cookie-shop-001", seeded specifically for
 this purpose — see scripts/seed_business.py) so it routes to the real cookie catalog/address/
-delivery_rules, not a business needing a temporary workaround.
+delivery_rules, not a business needing a temporary workaround. Pass a third argument to target
+a different seeded demo business instead (e.g. "demo-souvenir-shop-001" for the souvenir shop
+demo, Doc 3 roadmap 2026-09-06).
 
 Usage: uv run python scripts/demo_webhook_trigger_staging.py "1 box of 6 Chocolate Chip"
        uv run python scripts/demo_webhook_trigger_staging.py "..." 962790005555  # pick a fresh
        thread by using a different fake customer number — avoids stacking multiple unresolved
        order messages onto the same conversation, which confuses generate_response about which
        message it's actually replying to (a real, separate finding, not a Phase 6c bug).
+       uv run python scripts/demo_webhook_trigger_staging.py "..." 962790005555 \
+           demo-souvenir-shop-001
 """
 
 import hashlib
@@ -80,9 +84,10 @@ def main() -> None:
         else "I'd like to order 1 box of 6 Classic Chocolate Chip cookies, deliver to Sweifieh"
     )
     customer_number = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_CUSTOMER_NUMBER
+    phone_number_id = sys.argv[3] if len(sys.argv) > 3 else DEMO_PHONE_NUMBER_ID
     settings = get_settings()
 
-    body = json.dumps(build_payload(text, DEMO_PHONE_NUMBER_ID, customer_number)).encode()
+    body = json.dumps(build_payload(text, phone_number_id, customer_number)).encode()
     signature = hmac.new(settings.meta_app_secret.encode(), body, hashlib.sha256).hexdigest()
 
     print(f"Simulating an inbound WhatsApp message from {customer_number} to staging: {text!r}")
