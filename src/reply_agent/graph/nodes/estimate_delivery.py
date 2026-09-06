@@ -26,7 +26,9 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from reply_agent.billing.cost_tracking import log_anthropic_call, log_google_maps_call
 from reply_agent.db.models import (
     Business,
     ChannelType,
@@ -76,7 +78,9 @@ Only use what's actually in the message — never guess an address that isn't th
 """
 
 
-async def _extract_order_details(message_text: str) -> OrderExtraction:
+async def _extract_order_details(
+    message_text: str, session: AsyncSession, *, business_id: uuid.UUID, thread_id: str
+) -> OrderExtraction:
     client = get_anthropic_client()
     response = await client.messages.parse(
         model=MODEL_HAIKU,
@@ -85,6 +89,18 @@ async def _extract_order_details(message_text: str) -> OrderExtraction:
         messages=[{"role": "user", "content": message_text}],
         output_format=OrderExtraction,
     )
+
+    # Doc 5 margin-verification roadmap — reuses the caller's already-open tenant_session
+    # rather than opening a second one just for this.
+    await log_anthropic_call(
+        session,
+        business_id=business_id,
+        thread_id=thread_id,
+        node_name="estimate_delivery.extract_order_details",
+        model=MODEL_HAIKU,
+        usage=response.usage,
+    )
+
     return response.parsed_output
 
 
@@ -103,7 +119,9 @@ async def estimate_delivery(state: GraphState) -> dict:
 
         # Now runs unconditionally (module docstring) — every place_order needs an address to
         # create the pending-confirmation Order row below, whichever branch it takes.
-        extraction = await _extract_order_details(state["message"]["text"])
+        extraction = await _extract_order_details(
+            state["message"]["text"], session, business_id=business_id, thread_id=state["thread_id"]
+        )
 
         # Capability gap (risk_rules.py's NO_CAPABILITY_LABELS) — the agent must never guess
         # an address or the shop's own location, so this escalates rather than answering.
@@ -162,6 +180,16 @@ async def estimate_delivery(state: GraphState) -> dict:
             )
         except GoogleMapsError:
             return {"delivery_estimate": None}
+
+        # Doc 5 margin-verification roadmap — logged only on a successful call (the common
+        # case, matching this whole doc's "conservative estimate" spirit); a failed call is
+        # rare enough here not to bother reconciling exactly.
+        await log_google_maps_call(
+            session,
+            business_id=business_id,
+            thread_id=state["thread_id"],
+            node_name="estimate_delivery.transit_minutes",
+        )
 
         estimated_minutes = transit_minutes + backlog_count * MINUTES_PER_ORDER_IN_QUEUE
         low_hours = max(1, estimated_minutes // 60)

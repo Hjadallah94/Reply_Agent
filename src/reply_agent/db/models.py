@@ -20,6 +20,8 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
+    Numeric,
     Text,
     UniqueConstraint,
     func,
@@ -89,6 +91,16 @@ class CustomRuleStatus(enum.StrEnum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class ApiCallProvider(enum.StrEnum):
+    """Doc 5 margin-verification roadmap — which third-party API a logged ApiCallLog row
+    billed against, so cost_rates.py knows which rate table to apply.
+    """
+
+    anthropic = "anthropic"
+    google_maps = "google_maps"
+    voyage = "voyage"
 
 
 class OrderConfirmationStatus(enum.StrEnum):
@@ -575,3 +587,45 @@ class CustomRule(Base):
     )
 
     __table_args__ = (Index("ix_custom_rules_business_id", "business_id"),)
+
+
+class ApiCallLog(Base):
+    """Doc 5 margin-verification roadmap — one row per third-party API call a graph node makes
+    (billing/cost_tracking.py's log_anthropic_call/log_google_maps_call/log_voyage_call), so
+    scripts/conversation_cost_report.py can total up exactly what one conversation actually
+    cost, checked against Doc 5's per-message cost assumptions.
+
+    thread_id, not conversation_id: every node already carries GraphState["thread_id"] with no
+    extra lookup, whereas conversation_id would need one per call site. cost_usd is computed
+    and stored at write time (billing/cost_rates.py) rather than recomputed later — a future
+    rate change must never silently rewrite what a past conversation was actually estimated to
+    cost.
+    """
+
+    __tablename__ = "api_call_logs"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False
+    )
+    thread_id: Mapped[str] = mapped_column(Text, nullable=False)
+    node_name: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[ApiCallProvider] = mapped_column(
+        Enum(ApiCallProvider, name="api_call_provider"), nullable=False
+    )
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # e.g. 1 "element" for a Google Maps Compute Route Matrix call — meaningless for Anthropic/
+    # Voyage calls, which report input_tokens/output_tokens instead.
+    units: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 10 decimal places, not the more typical 2-6: a single Voyage embedding call (billing/
+    # cost_rates.py's $0.06/million-token rate) on a short customer message costs a small
+    # fraction of a cent — e.g. ~$0.00000048 — which Numeric(10, 6) silently rounds to zero
+    # (caught by a real test run locally, not assumed).
+    cost_usd: Mapped[float] = mapped_column(Numeric(14, 10), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (Index("ix_api_call_logs_business_id_thread_id", "business_id", "thread_id"),)

@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from reply_agent.billing.cost_tracking import log_anthropic_call
 from reply_agent.db.models import Order, OrderConfirmationStatus
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
@@ -44,7 +45,9 @@ class ConfirmationDecision(BaseModel):
     reason: str
 
 
-async def _classify_reply(history_text: str, message_text: str) -> ConfirmationDecision:
+async def _classify_reply(
+    history_text: str, message_text: str, *, business_id: uuid.UUID, thread_id: str
+) -> ConfirmationDecision:
     user_prompt = (
         f"Recent conversation:\n{history_text or '(no prior turns)'}\n\n"
         f"Customer's latest reply: {message_text}"
@@ -57,6 +60,20 @@ async def _classify_reply(history_text: str, message_text: str) -> ConfirmationD
         messages=[{"role": "user", "content": user_prompt}],
         output_format=ConfirmationDecision,
     )
+
+    # Doc 5 margin-verification roadmap — logged here, not in the caller, since business_id/
+    # thread_id are only needed for this one purpose and keeping them out of the caller's own
+    # tenant_session (opened afterward, for a different row) keeps that transaction unrelated.
+    async with tenant_session(business_id) as session:
+        await log_anthropic_call(
+            session,
+            business_id=business_id,
+            thread_id=thread_id,
+            node_name="classify_confirmation_reply",
+            model=MODEL_HAIKU,
+            usage=response.usage,
+        )
+
     return response.parsed_output
 
 
@@ -67,7 +84,14 @@ async def classify_confirmation_reply(state: GraphState) -> dict:
     history_text = "\n".join(
         f"{t['role']}: {t['text']}" for t in state.get("conversation_history", [])[-4:]
     )
-    decision = (await _classify_reply(history_text, state["message"]["text"])).decision
+    decision = (
+        await _classify_reply(
+            history_text,
+            state["message"]["text"],
+            business_id=business_id,
+            thread_id=state["thread_id"],
+        )
+    ).decision
 
     async with tenant_session(business_id) as session:
         order = await session.get(Order, uuid.UUID(pending["id"]))

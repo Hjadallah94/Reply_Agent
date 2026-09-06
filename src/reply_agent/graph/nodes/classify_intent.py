@@ -1,7 +1,10 @@
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel
 
+from reply_agent.billing.cost_tracking import log_anthropic_call
+from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.llm.client import MODEL_HAIKU, get_anthropic_client
 
@@ -65,6 +68,18 @@ async def classify_intent(state: GraphState) -> dict:
         output_format=IntentClassification,
     )
     result = response.parsed_output
+
+    # Doc 5 margin-verification roadmap — no other DB access in this node, so this opens its
+    # own small tenant_session just to log (see billing/cost_tracking.py).
+    async with tenant_session(uuid.UUID(state["business_id"])) as session:
+        await log_anthropic_call(
+            session,
+            business_id=uuid.UUID(state["business_id"]),
+            thread_id=state["thread_id"],
+            node_name="classify_intent",
+            model=MODEL_HAIKU,
+            usage=response.usage,
+        )
 
     return {
         "intent": {

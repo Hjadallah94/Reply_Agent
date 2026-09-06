@@ -12,6 +12,7 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from reply_agent.billing.cost_tracking import log_voyage_call
 from reply_agent.db.models import Customer, KnowledgeDocType, KnowledgeDocument, Order
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
@@ -61,6 +62,16 @@ async def retrieve_knowledge(state: GraphState) -> dict:
     query_vector = embed_query(state["message"]["text"])
 
     async with tenant_session(uuid.UUID(state["business_id"])) as session:
+        # Doc 5 margin-verification roadmap — logged here (the query embedding above already
+        # happened, but this is the first point a session is open to write it).
+        await log_voyage_call(
+            session,
+            business_id=uuid.UUID(state["business_id"]),
+            thread_id=state["thread_id"],
+            node_name="retrieve_knowledge.embed_query",
+            text=state["message"]["text"],
+        )
+
         distance = KnowledgeDocument.embedding_vector.cosine_distance(query_vector)
         rows = (
             await session.execute(

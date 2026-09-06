@@ -8,9 +8,16 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
-from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument, PlanTier
+from reply_agent.db.models import (
+    ApiCallLog,
+    ApiCallProvider,
+    Business,
+    KnowledgeDocType,
+    KnowledgeDocument,
+    PlanTier,
+)
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.nodes.retrieve_knowledge import retrieve_knowledge
 
@@ -35,6 +42,7 @@ async def business():
 def _state(business_id) -> dict:
     return {
         "business_id": str(business_id),
+        "thread_id": f"whatsapp:{business_id}:962790001111",
         "message": {
             "text": "Any promotions running right now?",
             "media_refs": [],
@@ -125,3 +133,29 @@ async def test_non_promotion_documents_are_unaffected_by_the_date_filter(busines
 
     snippets = [c["snippet"] for c in result["retrieved_context"]]
     assert any("Do you deliver?" in s for s in snippets)
+
+
+async def test_embed_query_call_is_logged_for_cost_tracking(business):
+    """Doc 5 margin-verification roadmap — log_voyage_call's own call site sits in this node's
+    body, not inside the mocked embed_query, so it still runs for real here.
+    """
+    with patch(
+        "reply_agent.graph.nodes.retrieve_knowledge.embed_query",
+        return_value=[0.1] * EMBEDDING_DIM,
+    ):
+        await retrieve_knowledge(_state(business.id))
+
+    async with get_sessionmaker()() as session:
+        logs = (
+            await session.scalars(
+                select(ApiCallLog).where(
+                    ApiCallLog.business_id == business.id,
+                    ApiCallLog.provider == ApiCallProvider.voyage,
+                )
+            )
+        ).all()
+
+    assert len(logs) == 1
+    assert logs[0].node_name == "retrieve_knowledge.embed_query"
+    assert logs[0].input_tokens > 0
+    assert logs[0].cost_usd > 0

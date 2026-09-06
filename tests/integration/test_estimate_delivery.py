@@ -15,6 +15,8 @@ import pytest
 from sqlalchemy import delete, select
 
 from reply_agent.db.models import (
+    ApiCallLog,
+    ApiCallProvider,
     Business,
     ChannelType,
     Customer,
@@ -177,3 +179,17 @@ async def test_before_cutoff_computes_estimate_and_backlog_grows_across_orders(b
         assert len(orders) == 2
         assert all(o.delivery_status == "pending" for o in orders)
         assert all(o.confirmation_status == OrderConfirmationStatus.pending for o in orders)
+
+        # Doc 5 margin-verification roadmap — one ApiCallLog row per successful Maps call
+        # (log_google_maps_call's own call site sits in this node, not inside the mocked
+        # estimate_transit_minutes, so it still runs for real here).
+        maps_logs = (
+            await session.scalars(
+                select(ApiCallLog).where(
+                    ApiCallLog.business_id == business.id,
+                    ApiCallLog.provider == ApiCallProvider.google_maps,
+                )
+            )
+        ).all()
+        assert len(maps_logs) == 2
+        assert all(float(log.cost_usd) == pytest.approx(0.01) for log in maps_logs)

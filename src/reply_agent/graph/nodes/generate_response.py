@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy import select
 
+from reply_agent.billing.cost_tracking import log_anthropic_call
 from reply_agent.db.models import (
     Business,
     CustomRule,
@@ -95,6 +96,19 @@ async def generate_response(state: GraphState) -> dict:
         messages=messages,
     )
     reply_text = next((b.text for b in response.content if b.type == "text"), "")
+
+    # Doc 5 margin-verification roadmap — the tenant_session above already closed before this
+    # call (brand_voice_docs/approved_rules didn't need to stay open for it), so this opens a
+    # second small one just to log.
+    async with tenant_session(business_id) as session:
+        await log_anthropic_call(
+            session,
+            business_id=business_id,
+            thread_id=state["thread_id"],
+            node_name="generate_response",
+            model=model,
+            usage=response.usage,
+        )
 
     return {
         "draft_reply": {
