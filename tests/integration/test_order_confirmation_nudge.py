@@ -29,7 +29,9 @@ from reply_agent.worker import _send_order_confirmation_nudge_async
 
 AMMAN_TZ = ZoneInfo("Asia/Amman")
 CUSTOMER_PHONE = "962790006666"
+IG_CUSTOMER_HANDLE = "ig-scoped-id-777"
 THREAD_ID_TEMPLATE = "whatsapp:{business_id}:" + CUSTOMER_PHONE
+IG_THREAD_ID_TEMPLATE = "instagram:{business_id}:" + IG_CUSTOMER_HANDLE
 
 
 @pytest.fixture
@@ -38,7 +40,10 @@ async def business():
         b = Business(
             name="Nudge Test Cookie Co",
             plan_tier=PlanTier.starter,
-            channels_connected={"whatsapp": {"phone_number_id": "test-phone-number-id"}},
+            channels_connected={
+                "whatsapp": {"phone_number_id": "test-phone-number-id"},
+                "instagram": {"page_id": "test-page-id"},
+            },
         )
         session.add(b)
         await session.commit()
@@ -80,12 +85,41 @@ async def conversation(business):
         yield conv
 
 
+@pytest.fixture
+async def instagram_conversation(business):
+    """Doc 3 roadmap (per-seller channel choice) — proves the nudge works for a customer
+    identified by an opaque IGSID rather than a phone number, same shape as `conversation`
+    above but on the instagram channel.
+    """
+    async with get_sessionmaker()() as session:
+        customer = Customer(
+            business_id=business.id,
+            channel=ChannelType.instagram,
+            channel_handle=IG_CUSTOMER_HANDLE,
+        )
+        session.add(customer)
+        await session.flush()
+
+        conv = Conversation(
+            business_id=business.id,
+            channel=ChannelType.instagram,
+            customer_id=customer.id,
+            status=ConversationStatus.auto,
+            thread_id=IG_THREAD_ID_TEMPLATE.format(business_id=business.id),
+        )
+        session.add(conv)
+        await session.commit()
+        await session.refresh(conv)
+        yield conv
+
+
 async def _seed_order(
     business_id: uuid.UUID,
     *,
     confirmation_status: OrderConfirmationStatus,
     confirmation_nudge_sent_at: datetime | None = None,
     customer_phone: str = CUSTOMER_PHONE,
+    channel: ChannelType | None = ChannelType.whatsapp,
 ) -> Order:
     async with get_sessionmaker()() as session:
         order = Order(
@@ -101,6 +135,7 @@ async def _seed_order(
             confirmation_status=confirmation_status,
             confirmation_sent_at=datetime.now(AMMAN_TZ),
             confirmation_nudge_sent_at=confirmation_nudge_sent_at,
+            channel=channel,
         )
         session.add(order)
         await session.commit()
@@ -173,6 +208,56 @@ async def test_no_op_when_no_matching_whatsapp_customer(business, conversation):
         business.id,
         confirmation_status=OrderConfirmationStatus.pending,
         customer_phone="962790009999",  # no Customer row with this handle exists
+    )
+
+    with patch(
+        "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
+    ) as mock_send:
+        await _send_order_confirmation_nudge_async(str(order.id))
+
+    mock_send.assert_not_called()
+
+
+async def test_sends_nudge_for_an_instagram_order(business, instagram_conversation):
+    """Doc 3 roadmap (per-seller channel choice) — the nudge is no longer WhatsApp-only;
+    order.channel disambiguates the customer lookup instead of a hardcoded ChannelType.whatsapp
+    filter, so an Instagram order's IGSID-identified customer is found correctly.
+    """
+    order = await _seed_order(
+        business.id,
+        confirmation_status=OrderConfirmationStatus.pending,
+        customer_phone=IG_CUSTOMER_HANDLE,
+        channel=ChannelType.instagram,
+    )
+
+    with patch(
+        "reply_agent.graph.nodes.send_reply.send_instagram_message", new=AsyncMock()
+    ) as mock_send:
+        await _send_order_confirmation_nudge_async(str(order.id))
+
+    mock_send.assert_called_once()
+    assert mock_send.call_args.kwargs["to"] == IG_CUSTOMER_HANDLE
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Order, order.id)
+        assert refreshed.confirmation_nudge_sent_at is not None
+
+        outbound = await session.scalar(
+            select(Message).where(
+                Message.conversation_id == instagram_conversation.id,
+                Message.direction == MessageDirection.outbound,
+            )
+        )
+        assert outbound is not None
+
+
+async def test_no_op_when_order_has_no_channel_recorded(business, conversation):
+    """Orders created before this field existed have channel=None — skip rather than guess
+    which channel to look the customer up on, instead of defaulting to WhatsApp and either
+    matching the wrong customer or (harmlessly, here) matching none.
+    """
+    order = await _seed_order(
+        business.id, confirmation_status=OrderConfirmationStatus.pending, channel=None
     )
 
     with patch(

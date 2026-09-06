@@ -27,7 +27,13 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from reply_agent.db.models import Business, Customer, Order, OrderConfirmationStatus
+from reply_agent.db.models import (
+    Business,
+    ChannelType,
+    Customer,
+    Order,
+    OrderConfirmationStatus,
+)
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.state import GraphState
 from reply_agent.integrations.google_maps import GoogleMapsError, estimate_transit_minutes
@@ -130,6 +136,7 @@ async def estimate_delivery(state: GraphState) -> dict:
                     delivery_window_promised="tomorrow",
                     delivery_status="pending",
                     confirmation_status=OrderConfirmationStatus.pending,
+                    channel=ChannelType(state["channel"]),
                 )
             )
             return {
@@ -173,6 +180,7 @@ async def estimate_delivery(state: GraphState) -> dict:
                 delivery_window_promised=window_text,
                 delivery_status="pending",
                 confirmation_status=OrderConfirmationStatus.pending,
+                channel=ChannelType(state["channel"]),
             )
         )
 

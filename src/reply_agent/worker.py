@@ -20,7 +20,6 @@ from sqlalchemy import select
 
 from reply_agent.channels.common import NormalizedInboundEvent
 from reply_agent.db.models import (
-    ChannelType,
     Conversation,
     Customer,
     Message,
@@ -129,20 +128,33 @@ async def _send_order_confirmation_nudge_async(order_id: str) -> None:
         # (never auto-cancel/escalate), so it alone can't signal "already nudged."
         return
 
+    if order.channel is None:
+        # Pre-dates this field (orders created before the Doc 3 multi-channel follow-up) — no
+        # reliable way to know which channel to look the customer up on, so skip rather than
+        # guess. New orders always set this (estimate_delivery.py), so this only affects a
+        # dwindling set of already-pending orders from before the migration.
+        logger.warning(
+            "Order confirmation nudge: order %s has no channel recorded, skipping", order_id
+        )
+        return
+
     async with tenant_session(order.business_id) as session:
-        # Only WhatsApp customers are phone-identified (same convention as
-        # retrieve_knowledge.py's order-status lookup) — Instagram/Messenger handles are
-        # opaque IGSID/PSIDs, not phone numbers, so they'd never coincidentally match anyway.
+        # customer_phone isn't actually phone-shaped for Instagram/Messenger orders (it's
+        # whichever opaque IGSID/PSID that customer's channel_handle is) — order.channel
+        # disambiguates which customer row it refers to, same identity shape as
+        # context_resolution.py's Customer lookups elsewhere.
         customer = await session.scalar(
             select(Customer).where(
                 Customer.business_id == order.business_id,
-                Customer.channel == ChannelType.whatsapp,
+                Customer.channel == order.channel,
                 Customer.channel_handle == order.customer_phone,
             )
         )
         if customer is None:
             logger.warning(
-                "Order confirmation nudge: no WhatsApp customer found for order %s", order_id
+                "Order confirmation nudge: no %s customer found for order %s",
+                order.channel.value,
+                order_id,
             )
             return
         conversation = await session.scalar(

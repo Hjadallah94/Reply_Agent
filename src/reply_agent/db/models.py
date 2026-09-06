@@ -237,6 +237,15 @@ class Order(Base):
     delivery_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_window_promised: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Doc 3 roadmap (multi-channel order confirmation follow-up) — which channel this order
+    # came in on (estimate_delivery.py sets it from GraphState at creation time). Needed so the
+    # nudge job (worker.py) can look up the right Customer row without guessing a channel —
+    # customer_phone isn't actually phone-shaped for Instagram/Messenger orders (it's whichever
+    # opaque IGSID/PSID that customer's channel_handle is), so channel disambiguates it exactly
+    # rather than relying on the two ID formats never coincidentally colliding.
+    channel: Mapped[ChannelType | None] = mapped_column(
+        Enum(ChannelType, name="channel_type"), nullable=True
+    )
     # Doc 3 roadmap (order confirmation layer) — nullable, see OrderConfirmationStatus docstring.
     confirmation_status: Mapped[OrderConfirmationStatus | None] = mapped_column(
         Enum(OrderConfirmationStatus, name="order_confirmation_status"), nullable=True
