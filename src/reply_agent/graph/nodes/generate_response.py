@@ -68,6 +68,7 @@ async def generate_response(state: GraphState) -> dict:
         business_name=business.name if business else "this seller",
         brand_voice_examples=[doc.content for doc in brand_voice_docs],
         retrieved_context=context_text,
+        customer_message=state["message"]["text"],
         delivery_estimate=state.get("delivery_estimate"),
         custom_rules=[rule.rule_text for rule in approved_rules],
         require_order_confirmation=require_order_confirmation,

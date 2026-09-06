@@ -1,4 +1,8 @@
-from reply_agent.llm.prompts.system import BASE_SYSTEM_PROMPT, build_system_prompt
+from reply_agent.llm.prompts.system import (
+    BASE_SYSTEM_PROMPT,
+    _reply_language_hint,
+    build_system_prompt,
+)
 
 
 def _prompt(**overrides) -> str:
@@ -66,3 +70,40 @@ def test_brand_voice_examples_do_not_override_the_customers_own_language():
     prompt = _prompt(brand_voice_examples=["Customer: hi\nSeller: مرحبا فيك!"])
     assert "don't copy their language" in prompt
     assert "language rule above" in prompt
+
+
+def test_reply_language_hint_detects_arabic_script():
+    assert "Arabic script" in _reply_language_hint("كم سعر العباية؟")
+    assert "Reply in Arabic script" in _reply_language_hint("كم سعر العباية؟")
+
+
+def test_reply_language_hint_treats_english_as_latin_script():
+    hint = _reply_language_hint("how much is the Dead Sea one?")
+    assert "Latin letters" in hint
+    assert "Do NOT reply in Arabic script" in hint
+
+
+def test_reply_language_hint_treats_arabizi_as_latin_script_too():
+    # Doc 3 roadmap — Arabizi/Franco-Arabic is Latin-script Arabic; the point of this hint is
+    # only ever "did the customer type Arabic script or not", not full language identification.
+    hint = _reply_language_hint("kifak, 3andkun scarf b7wali 12 dinar?")
+    assert "Latin letters" in hint
+
+
+def test_language_hint_absent_from_prompt_when_no_customer_message_given():
+    assert "IMPORTANT: The customer's latest message" not in _prompt()
+
+
+def test_language_hint_present_when_customer_message_given():
+    """Live-testing bug (souvenir-shop demo, 2026-09-06): even after fixing the brand-voice
+    override, a plain English question ("how much is the Dead Sea one?") still got an Arabic
+    reply — a rule stated once, early in a long system prompt, wasn't reliable enough. This is
+    the deterministic, per-turn reinforcement placed last in the prompt instead.
+    """
+    prompt = _prompt(customer_message="how much is the Dead Sea one?")
+    assert "IMPORTANT: The customer's latest message uses Latin letters only" in prompt
+    # Placed after the retrieved context, not before — recency in the prompt matters for how
+    # reliably a model actually follows an instruction.
+    assert prompt.rindex("IMPORTANT: The customer's latest message") > prompt.rindex(
+        "Retrieved context for this conversation"
+    )

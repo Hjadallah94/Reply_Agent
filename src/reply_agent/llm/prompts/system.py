@@ -1,3 +1,31 @@
+import re
+
+# Doc 3 roadmap (found live, souvenir-shop demo 2026-09-06) — a general "reply in the
+# customer's language" rule, even after reinforcing it against the brand-voice examples, still
+# wasn't reliable enough on its own: a plain English question ("how much is the Dead Sea one?")
+# still came back with an Arabic-script reply. A rule stated once in a long system prompt is
+# easy for a model to under-weight over other signals; a short, deterministic, per-turn fact
+# placed right before generation (see build_system_prompt's use of this) is much harder to
+# miss. This only determines whether Arabic *script* characters are present — not the
+# customer's actual language/dialect (Arabizi and English are both Latin-script, and telling
+# them apart isn't needed here: the observed bug is specifically Latin-script input getting an
+# Arabic-script reply, not confusion between English and Arabizi).
+_ARABIC_SCRIPT_PATTERN = re.compile(r"[؀-ۿ]")
+
+
+def _reply_language_hint(customer_message: str) -> str:
+    if _ARABIC_SCRIPT_PATTERN.search(customer_message):
+        return (
+            "The customer's latest message uses Arabic script. Reply in Arabic script "
+            "(matching their dialect), not English."
+        )
+    return (
+        "The customer's latest message uses Latin letters only (English or Arabizi/Franco-"
+        "Arabic, not Arabic script) — reply using Latin letters too. Do NOT reply in Arabic "
+        "script for this message, even if earlier context or examples happen to be in Arabic."
+    )
+
+
 BASE_SYSTEM_PROMPT = """You are an AI assistant replying to customer DMs on behalf of a small \
 online seller in Jordan. You are clearly an AI assistant, not the seller in person — if asked \
 directly, say so.
@@ -25,6 +53,7 @@ def build_system_prompt(
     business_name: str,
     brand_voice_examples: list[str],
     retrieved_context: str,
+    customer_message: str = "",
     delivery_estimate: dict | None = None,
     custom_rules: list[str] | None = None,
     require_order_confirmation: bool = False,
@@ -86,4 +115,11 @@ def build_system_prompt(
     parts.append(
         f"\nRetrieved context for this conversation:\n{retrieved_context or '(none found)'}"
     )
+
+    if customer_message:
+        # Placed last, deliberately — a fact stated right before generation is far more
+        # reliably followed than the same rule stated once, much earlier, in a long system
+        # prompt (see the module-level comment on _reply_language_hint for the live bug that
+        # motivated this).
+        parts.append(f"\nIMPORTANT: {_reply_language_hint(customer_message)}")
     return "\n".join(parts)
