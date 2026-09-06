@@ -1,4 +1,4 @@
-from reply_agent.llm.prompts.system import build_system_prompt
+from reply_agent.llm.prompts.system import BASE_SYSTEM_PROMPT, build_system_prompt
 
 
 def _prompt(**overrides) -> str:
@@ -45,3 +45,14 @@ def test_order_confirmation_instruction_appears_when_required():
 
 def test_order_confirmation_instruction_absent_when_explicitly_false():
     assert "before this order is treated as placed" not in _prompt(require_order_confirmation=False)
+
+
+def test_base_prompt_names_arabizi_explicitly():
+    # Souvenir-shop demo roadmap — customers sometimes write Arabic in Latin letters/digits
+    # (e.g. "3" for ع); this must be named explicitly, not left to the code-switching line alone.
+    assert "Arabizi" in BASE_SYSTEM_PROMPT
+    assert "3" in BASE_SYSTEM_PROMPT and "ع" in BASE_SYSTEM_PROMPT
+
+
+def test_base_prompt_instructs_asking_for_clarification_when_ambiguous():
+    assert "ask a short, specific clarifying" in BASE_SYSTEM_PROMPT
