@@ -10,6 +10,7 @@ from reply_agent.api.knowledge import router as knowledge_router
 from reply_agent.api.meta_compliance import router as meta_compliance_router
 from reply_agent.api.onboarding import router as onboarding_router
 from reply_agent.api.orders import router as orders_router
+from reply_agent.api.public import router as public_router
 from reply_agent.channels.instagram.webhook import router as instagram_router
 from reply_agent.channels.messenger.webhook import router as messenger_router
 from reply_agent.channels.whatsapp.webhook import router as whatsapp_router
@@ -26,6 +27,7 @@ app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(onboarding_router)
 app.include_router(meta_compliance_router)
+app.include_router(public_router)
 
 
 @app.get("/health")

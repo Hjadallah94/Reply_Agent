@@ -4,10 +4,18 @@
 <a class="back" href="/businesses/{{ business.id }}/dashboard/catalog">&larr; {{ t('catalog.heading') }}</a>
 <h1>{{ t('product_form.edit_title') if document else t('product_form.add_title') }}</h1>
 
-<form method="post" action="{{ '/businesses/%s/dashboard/catalog/products/%s/edit' % (business.id, document.id) if document else '/businesses/%s/dashboard/catalog/products/new' % business.id }}">
+{% if document and has_image %}
+<img src="/public/products/{{ document.id }}/image" alt="{{ product.name }}" style="max-width: 220px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px; display: block;">
+{% endif %}
+<form method="post" enctype="multipart/form-data" action="{{ '/businesses/%s/dashboard/catalog/products/%s/edit' % (business.id, document.id) if document else '/businesses/%s/dashboard/catalog/products/new' % business.id }}">
   <div class="field">
     <label for="name">{{ t('product_form.name_label') }}</label>
     <input type="text" id="name" name="name" value="{{ product.name if product else '' }}" required>
+  </div>
+  <div class="field">
+    <label for="image">{{ t('product_form.image_label') }}</label>
+    <input type="file" id="image" name="image" accept="image/*">
+    <span class="hint">{{ t('product_form.image_hint') }}</span>
   </div>
   <div class="field">
     <label for="description">{{ t('product_form.description_label') }}</label>

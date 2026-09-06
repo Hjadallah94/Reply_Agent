@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from reply_agent.api.app import app
-from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument
+from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument, ProductImage
 from reply_agent.db.session import get_sessionmaker
 from tests.auth_helpers import create_logged_in_business, dispose_engines
 
@@ -140,6 +140,121 @@ async def test_delete_product(client, business):
     await dispose_engines()
     async with get_sessionmaker()() as session:
         assert await session.get(KnowledgeDocument, doc_id) is None
+
+
+async def test_create_product_with_image_stores_it(client, business):
+    """Doc 3 roadmap ("agent can send photo samples")."""
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        response = client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/new",
+            data={"name": "Photographed Mug", "price_jod": "4"},
+            files={"image": ("mug.png", b"fake-png-bytes", "image/png")},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        doc = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.product,
+            )
+        )
+        image = await session.scalar(select(ProductImage).where(ProductImage.document_id == doc.id))
+        assert image is not None
+        assert image.image_data == b"fake-png-bytes"
+        assert image.content_type == "image/png"
+
+
+async def test_create_product_without_image_stores_none(client, business):
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/new",
+            data={"name": "No Photo Yet", "price_jod": "2"},
+            follow_redirects=False,
+        )
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        doc = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.product,
+            )
+        )
+        image = await session.scalar(select(ProductImage).where(ProductImage.document_id == doc.id))
+        assert image is None
+
+
+async def test_edit_product_can_add_an_image_later(client, business):
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/new",
+            data={"name": "Plain For Now", "price_jod": "3"},
+            follow_redirects=False,
+        )
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        doc = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.product,
+            )
+        )
+        doc_id = doc.id
+    await dispose_engines()
+
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/{doc_id}/edit",
+            data={"name": "Plain For Now", "price_jod": "3"},
+            files={"image": ("added.jpg", b"added-later", "image/jpeg")},
+            follow_redirects=False,
+        )
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        image = await session.scalar(select(ProductImage).where(ProductImage.document_id == doc_id))
+        assert image is not None
+        assert image.image_data == b"added-later"
+
+
+async def test_edit_product_without_new_image_keeps_the_existing_one(client, business):
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/new",
+            data={"name": "Has A Photo", "price_jod": "3"},
+            files={"image": ("original.jpg", b"original-bytes", "image/jpeg")},
+            follow_redirects=False,
+        )
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        doc = await session.scalar(
+            select(KnowledgeDocument).where(
+                KnowledgeDocument.business_id == business.id,
+                KnowledgeDocument.type == KnowledgeDocType.product,
+            )
+        )
+        doc_id = doc.id
+    await dispose_engines()
+
+    # Edit without touching the "image" field at all — the existing photo must survive.
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/{doc_id}/edit",
+            data={"name": "Has A Photo, Renamed", "price_jod": "3"},
+            follow_redirects=False,
+        )
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        image = await session.scalar(select(ProductImage).where(ProductImage.document_id == doc_id))
+        assert image is not None
+        assert image.image_data == b"original-bytes"
 
 
 async def test_edit_product_404s_for_unknown_document(client, business):

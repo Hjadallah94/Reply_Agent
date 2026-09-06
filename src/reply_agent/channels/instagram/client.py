@@ -3,6 +3,7 @@ its own module so Instagram-specific behavior (e.g. the 7-day human-agent tag wi
 differs from Messenger's rules) has a natural place to live without touching the shared code.
 """
 
-from reply_agent.channels.common import send_page_message
+from reply_agent.channels.common import send_page_image, send_page_message
 
 send_text_message = send_page_message
+send_image_message = send_page_image

@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     Text,
     UniqueConstraint,
@@ -233,6 +234,36 @@ class KnowledgeDocument(Base):
     business: Mapped["Business"] = relationship(back_populates="knowledge_documents")
 
     __table_args__ = (Index("ix_knowledge_documents_business_id", "business_id"),)
+
+
+class ProductImage(Base):
+    """A single photo for a type=product KnowledgeDocument (Doc 3 roadmap, "agent can send
+    photo samples") — kept in its own table, not a column on knowledge_documents itself, so
+    the frequently vector-scanned catalog table never carries image blobs. Stored as bytes in
+    Postgres, not on local disk: Render's free-tier filesystem isn't persistent across deploys,
+    and there's no cloud storage (S3 etc.) configured anywhere in this codebase — the right
+    call for a handful of catalog photos at this scale, not necessarily forever.
+
+    One image per product for now (document_id is unique) — a real limitation if an owner wants
+    multiple angles, not something this first pass supports.
+
+    No business_id column: reached only via document_id -> knowledge_documents.business_id,
+    same reasoning as messages/escalations reaching business_id via conversation_id
+    (migrations/versions/325e6d70b285_*.py) — RLS policy joins through knowledge_documents
+    rather than denormalizing business_id onto this table too.
+    """
+
+    __tablename__ = "product_images"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    image_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class Order(Base):

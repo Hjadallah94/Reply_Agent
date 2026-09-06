@@ -3,6 +3,7 @@ its own module so Messenger-specific behavior has a natural place to live withou
 shared code, mirroring channels/instagram/client.py.
 """
 
-from reply_agent.channels.common import send_page_message
+from reply_agent.channels.common import send_page_image, send_page_message
 
 send_text_message = send_page_message
+send_image_message = send_page_image

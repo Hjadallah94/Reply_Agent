@@ -12,7 +12,7 @@ from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from openpyxl import Workbook
@@ -46,6 +46,7 @@ from reply_agent.db.models import (
     MessageDirection,
     Order,
     PlanTier,
+    ProductImage,
     PushSubscription,
 )
 from reply_agent.db.tenant_session import tenant_session
@@ -1008,6 +1009,28 @@ async def catalog_list(request: Request, business: Business = Depends(require_bu
     )
 
 
+async def _save_product_image(session, document_id: uuid.UUID, image: UploadFile) -> None:
+    """Doc 3 roadmap ("agent can send photo samples") — upserts (one image per product,
+    ProductImage.document_id is unique). Caller's tenant_session owns the transaction, same
+    convention as knowledge/catalog.py's create_product/update_product.
+    """
+    image_data = await image.read()
+    existing = await session.scalar(
+        select(ProductImage).where(ProductImage.document_id == document_id)
+    )
+    if existing is not None:
+        existing.image_data = image_data
+        existing.content_type = image.content_type or "application/octet-stream"
+    else:
+        session.add(
+            ProductImage(
+                document_id=document_id,
+                image_data=image_data,
+                content_type=image.content_type or "application/octet-stream",
+            )
+        )
+
+
 @router.get("/businesses/{business_id}/dashboard/catalog/products/new")
 async def new_product_form(request: Request, business: Business = Depends(require_business_access)):
     return await _render(
@@ -1027,6 +1050,7 @@ async def create_product_route(
     price_jod: str = Form(...),
     stock_status: str = Form("in_stock"),
     variants: str = Form(""),
+    image: UploadFile | None = File(None),
     business: Business = Depends(require_business_access),
 ):
     try:
@@ -1041,7 +1065,13 @@ async def create_product_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async with tenant_session(business.id) as session:
-        await create_product(session, business.id, product)
+        document = await create_product(session, business.id, product)
+        # Flush so the document row actually exists before ProductImage's FK references it —
+        # document.id itself is already populated client-side (the pk's uuid4 default), but
+        # the row isn't in the database yet without this.
+        await session.flush()
+        if image is not None and image.filename:
+            await _save_product_image(session, document.id, image)
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
 
@@ -1056,6 +1086,11 @@ async def edit_product_form(
         document = _document_or_404(
             await session.get(KnowledgeDocument, document_id), business.id, KnowledgeDocType.product
         )
+        has_image = (
+            await session.scalar(
+                select(ProductImage.id).where(ProductImage.document_id == document_id)
+            )
+        ) is not None
 
     variants_text = "; ".join(
         f"{v['label']}:{v['stock_status']}" for v in document.structured_data.get("variants", [])
@@ -1067,6 +1102,7 @@ async def edit_product_form(
         document=document,
         product=document.structured_data,
         variants_text=variants_text,
+        has_image=has_image,
     )
 
 
@@ -1078,6 +1114,7 @@ async def update_product_route(
     price_jod: str = Form(...),
     stock_status: str = Form("in_stock"),
     variants: str = Form(""),
+    image: UploadFile | None = File(None),
     business: Business = Depends(require_business_access),
 ):
     try:
@@ -1096,6 +1133,10 @@ async def update_product_route(
             await session.get(KnowledgeDocument, document_id), business.id, KnowledgeDocType.product
         )
         await update_product(document, product)
+        # Leaves the existing photo untouched when the owner doesn't pick a new one — this is
+        # an edit form, not a "replace everything" one.
+        if image is not None and image.filename:
+            await _save_product_image(session, document_id, image)
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
 

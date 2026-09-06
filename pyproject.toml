@@ -51,7 +51,13 @@ select = ["E", "F", "I", "UP", "B"]
 # FastAPI's dependency-injection idiom is `param: T = Depends(fn)` — a function call in an
 # argument default everywhere else, but the correct pattern here, not the B008 mutable-default
 # footgun that rule exists to catch.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.File",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

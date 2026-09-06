@@ -48,3 +48,38 @@ async def send_text_message(to: str, text: str, phone_number_id: str) -> dict:
         raise WhatsAppSendError(f"WhatsApp send failed ({response.status_code}): {response.text}")
 
     return response.json()
+
+
+async def send_image_message(
+    to: str, image_url: str, phone_number_id: str, caption: str = ""
+) -> dict:
+    """Doc 3 roadmap ("agent can send photo samples") — sent by URL (api/public.py), not a
+    two-step upload-then-send: Meta's Cloud API fetches image_url itself, same "link" shape
+    Instagram/Messenger's Send API also uses (channels/common.py's send_page_image).
+    """
+    settings = get_settings()
+
+    if settings.meta_dry_run:
+        logger.info(
+            "[dry-run] WhatsApp image send to %s via %s: %s", to, phone_number_id, image_url
+        )
+        return {"dry_run": True, "to": to, "image_url": image_url}
+
+    url = f"https://graph.facebook.com/{settings.meta_graph_api_version}/{phone_number_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "image",
+        "image": {"link": image_url, "caption": caption} if caption else {"link": image_url},
+    }
+    headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+
+    if response.status_code >= 400:
+        raise WhatsAppSendError(
+            f"WhatsApp image send failed ({response.status_code}): {response.text}"
+        )
+
+    return response.json()

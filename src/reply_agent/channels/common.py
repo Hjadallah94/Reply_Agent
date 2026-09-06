@@ -155,3 +155,37 @@ async def send_page_message(to: str, text: str, page_id: str) -> dict:
         raise MetaSendError(f"Meta page send failed ({response.status_code}): {response.text}")
 
     return response.json()
+
+
+async def send_page_image(to: str, image_url: str, page_id: str) -> dict:
+    """Doc 3 roadmap ("agent can send photo samples") — also shared by Instagram Messaging and
+    Messenger Platform, same reasoning as send_page_message above. is_reusable=true lets Meta
+    cache the fetched image against this URL rather than re-fetching it on every send — a
+    catalog photo's URL is stable for as long as the product exists (api/public.py never
+    changes it), so this is a real, safe savings, not a premature optimization.
+    """
+    settings = get_settings()
+
+    if settings.meta_dry_run:
+        logger.info("[dry-run] Meta page image send to %s via %s: %s", to, page_id, image_url)
+        return {"dry_run": True, "to": to, "image_url": image_url}
+
+    url = f"https://graph.facebook.com/{settings.meta_graph_api_version}/{page_id}/messages"
+    payload = {
+        "recipient": {"id": to},
+        "message": {
+            "attachment": {"type": "image", "payload": {"url": image_url, "is_reusable": True}}
+        },
+        "messaging_type": "RESPONSE",
+    }
+    headers = {"Authorization": f"Bearer {settings.meta_page_access_token}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+
+    if response.status_code >= 400:
+        raise MetaSendError(
+            f"Meta page image send failed ({response.status_code}): {response.text}"
+        )
+
+    return response.json()

@@ -131,6 +131,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "product_form.edit_title": {"en": "Edit product", "ar": "تعديل المنتج"},
     "product_form.add_title": {"en": "Add product", "ar": "إضافة منتج"},
     "product_form.name_label": {"en": "Name", "ar": "الاسم"},
+    # Doc 3 roadmap ("agent can send photo samples") — optional; the agent attaches this photo
+    # when it cites this product in an auto-sent reply (graph/nodes/send_reply.py).
+    "product_form.image_label": {"en": "Photo", "ar": "صورة"},
+    "product_form.image_hint": {
+        "en": "Optional. Shown to customers when the agent mentions this product.",
+        "ar": "اختياري. تُعرض للعملاء عندما يذكر الوكيل هذا المنتج.",
+    },
     "product_form.description_label": {"en": "Description", "ar": "الوصف"},
     "product_form.price_label": {"en": "Price (JOD)", "ar": "السعر (دينار)"},
     "product_form.stock_status_label": {"en": "Stock status", "ar": "حالة المخزون"},
