@@ -1,0 +1,80 @@
+# Demo catalog for a Jordanian souvenir shop in Amman, built for the token/cost-tracking +
+# product-photo + multi-language demo (Doc 3 roadmap, 2026-09-06 partner request) — a third
+# demo persona alongside example_business (abayas) and cookie_shop (baked goods).
+- name: "Petra Treasury Miniature"
+  description: "Hand-painted resin replica of Al-Khazneh (the Treasury), Petra's most famous facade."
+  price_jod: 15
+  stock_status: in_stock
+  variants:
+    - label: "small (10cm)"
+      stock_status: in_stock
+    - label: "large (20cm)"
+      stock_status: in_stock
+
+- name: "Dead Sea Mud Soap Set"
+  description: "Set of 3 bars made with real Dead Sea mud and minerals."
+  price_jod: 6
+  stock_status: in_stock
+  variants:
+    - label: "original"
+      stock_status: in_stock
+    - label: "lavender"
+      stock_status: in_stock
+
+- name: "Handwoven Bedouin Rug (Small)"
+  description: "Small wool rug handwoven by a Bedouin cooperative in Wadi Rum, traditional geometric pattern."
+  price_jod: 45
+  stock_status: in_stock
+  variants: []
+
+- name: "Camel Wool Scarf"
+  description: "Soft camel wool scarf, woven locally."
+  price_jod: 12
+  stock_status: in_stock
+  variants:
+    - label: "black"
+      stock_status: in_stock
+    - label: "red"
+      stock_status: in_stock
+    - label: "beige"
+      stock_status: out_of_stock
+
+- name: "Mosaic Coasters (Set of 4)"
+  description: "Ceramic mosaic coasters in a traditional Jordanian pattern, cork backing."
+  price_jod: 10
+  stock_status: in_stock
+  variants: []
+
+- name: "Jordanian Coffee Gift Tin"
+  description: "Cardamom-spiced Jordanian coffee (mazbouta blend) in a decorative tin."
+  price_jod: 8
+  stock_status: in_stock
+  variants: []
+
+- name: "Olive Wood Camel Carving"
+  description: "Hand-carved olive wood camel figurine, made from Jordan Valley olive wood offcuts."
+  price_jod: 20
+  stock_status: in_stock
+  variants:
+    - label: "small"
+      stock_status: in_stock
+    - label: "medium"
+      stock_status: made_to_order
+
+- name: "Silver Bedouin Bracelet"
+  description: "Sterling silver bracelet with a traditional Bedouin beaded pattern."
+  price_jod: 9
+  stock_status: in_stock
+  variants: []
+
+- name: "Jordan Postcard Set"
+  description: "Set of 10 postcards featuring Petra, Wadi Rum, the Dead Sea, and Amman."
+  price_jod: 3
+  stock_status: in_stock
+  variants: []
+
+- name: "Dead Sea Salt Gift Set"
+  description: "Bath salts sourced from the Dead Sea, packaged as a gift set with a wooden scoop."
+  price_jod: 8
+  stock_status: in_stock
+  variants: []

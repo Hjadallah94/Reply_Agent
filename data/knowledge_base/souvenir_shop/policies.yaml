@@ -1,0 +1,31 @@
+- topic: delivery
+  content: >
+    Orders placed before 3:00pm are usually deliverable the same day, given at least 6 hours'
+    notice — how fast exactly depends on how many orders we already have and how far the
+    delivery is, we'll always check and tell you a real estimate before confirming. Orders
+    placed after 3:00pm go out the next day. Delivery currently covers Amman only.
+
+- topic: payment
+  content: >
+    Cash on Delivery (COD) is available everywhere we deliver. CliQ transfer is also accepted.
+    We never ask for card numbers, CVV codes, or bank details over chat.
+
+- topic: returns
+  content: >
+    Exchanges are accepted within 3 days of delivery if the item is unused and in its original
+    packaging. We don't offer cash refunds unless the item arrived defective or damaged.
+
+- topic: shipping
+  content: >
+    We don't currently offer shipping outside Jordan — delivery is Amman-only for now.
+
+- topic: authenticity
+  content: >
+    Materials and origin are described per item in the catalog (e.g. "handwoven by a Bedouin
+    cooperative", "hand-carved"). Not every item in the shop is handmade — some (like the
+    postcard sets and coffee tins) are manufactured, and the catalog says so.
+
+- topic: hours
+  content: >
+    We take orders daily from 9am to 9pm Amman time. Messages after 9pm are answered the next
+    morning.
