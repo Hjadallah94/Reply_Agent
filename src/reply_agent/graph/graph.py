@@ -1,6 +1,7 @@
 """Builds the LangGraph pipeline (Doc 2, Section 3.1, as corrected — see routers.py):
 
 ingest_message -> load_context -> [load_context_router]
+    --agent_disabled--------> escalate_to_owner -> update_memory -> END
     --away-----------------> send_away_reply -> update_memory -> END
     --pending_confirmation-> classify_confirmation_reply -> [order_confirmation_router]
         --confirmed-> generate_response (rejoins the normal path below)
@@ -28,14 +29,18 @@ escalation) but still needs the owner's sign-off before it reaches the customer.
 (order confirmation layer): it now only fires once the customer has actually confirmed the
 order (routers.py's needs_owner_approval) — see below.
 
-load_context_router (Doc 3 roadmap, "I'm not available today" + order confirmation layer) is
-the graph's *second* fan-out point, deliberately breaking the "every node runs unconditionally"
-pattern above: while a business is away, every message gets the same away-reply, so there's
-nothing useful for classification/retrieval/generation/self-check to do — skipping them
-outright, rather than having each one no-op internally, is a real cost saving, not just simpler
-code. Its second branch (pending_confirmation) is the same idea applied to the order
+load_context_router (Doc 3 roadmap, "I'm not available today" + order confirmation layer +
+agent on/off toggle) is the graph's *second* fan-out point, deliberately breaking the "every
+node runs unconditionally" pattern above: while a business is away, every message gets the same
+away-reply, so there's nothing useful for classification/retrieval/generation/self-check to do
+— skipping them outright, rather than having each one no-op internally, is a real cost saving,
+not just simpler code. Its pending_confirmation branch is the same idea applied to the order
 confirmation layer: when the customer has an unconfirmed order waiting on their reply, there's
-nothing useful for classify_intent to do with what's likely just "yes"/"no" text either.
+nothing useful for classify_intent to do with what's likely just "yes"/"no" text either. Its
+highest-priority branch (agent_disabled) targets escalate_to_owner directly rather than a new
+node — everything that node needs (state["message"]["text"], state["thread_id"]) is already
+set from the graph's very first state, and its own _escalation_reason helper already falls
+back gracefully with no intent/self_check ever having run.
 
 order_confirmation_router (Doc 3 roadmap) is the graph's *third* fan-out point, right after
 classify_confirmation_reply — see routers.py for the full reasoning on each of its three
@@ -98,6 +103,7 @@ def build_graph(checkpointer) -> StateGraph:
         "load_context",
         load_context_router,
         {
+            "agent_disabled": "escalate_to_owner",
             "away": "send_away_reply",
             "pending_confirmation": "classify_confirmation_reply",
             "continue": "classify_intent",

@@ -135,4 +135,21 @@
     <button type="submit">{{ t('dashboard.away_save') }}</button>
   </form>
 </div>
+
+<div class="card">
+  <form method="post" action="/businesses/{{ business.id }}/agent-mode">
+    <div class="row">
+      <strong>{{ t('dashboard.agent_mode_heading') }}</strong>
+      <span class="badge {{ 'resolved' if business.agent_enabled else 'pending' }}">{{ t('dashboard.agent_mode_status_on') if business.agent_enabled else t('dashboard.agent_mode_status_off') }}</span>
+    </div>
+    <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 13.5px; color: var(--text-muted);">
+      <input type="checkbox" name="agent_enabled" value="true" {% if business.agent_enabled %}checked{% endif %}>
+      {{ t('dashboard.agent_mode_checkbox_label') }}
+    </label>
+    {% if not business.agent_enabled %}
+      <p class="muted" style="margin: 0 0 10px;">{{ t('dashboard.agent_mode_off_note') }}</p>
+    {% endif %}
+    <button type="submit">{{ t('dashboard.agent_mode_save') }}</button>
+  </form>
+</div>
 {% endblock %}

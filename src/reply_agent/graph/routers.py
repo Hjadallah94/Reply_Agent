@@ -18,14 +18,20 @@ never need the owner's sign-off, only an order the customer has already agreed t
 load_context_router (Doc 3 roadmap) is different from all of the above: it's the graph's second
 fan-out point (after self_check's), sitting right after load_context, deliberately skipping
 classification/retrieval/generation/self-check entirely rather than letting a node no-op
-internally (estimate_delivery's pattern). Three-way, in priority order:
-1. away ("I'm not available today") — every message gets the same away-reply while away,
+internally (estimate_delivery's pattern). Four-way, in priority order:
+1. agent_disabled (agent on/off toggle) — the owner has switched off automated replies
+   entirely to answer customers by hand; takes priority over everything else below, including
+   away, since a fully-manual business shouldn't get an automated away-reply either. Routes
+   straight to escalate_to_owner (graph.py) — reused as-is, not a new node — so the message
+   actually surfaces in the owner's "Needs your reply" queue with a push notification, rather
+   than silently doing nothing.
+2. away ("I'm not available today") — every message gets the same away-reply while away,
    including ones that would otherwise escalate or continue a pending order confirmation, so
    there's nothing for the rest of the pipeline to usefully do.
-2. pending_confirmation (order confirmation layer) — the customer has an unconfirmed order
+3. pending_confirmation (order confirmation layer) — the customer has an unconfirmed order
    waiting on their reply; skip straight to classifying that reply rather than running
    classify_intent on what's likely just "yes"/"no" text.
-3. continue — the normal path, unchanged.
+4. continue — the normal path, unchanged.
 
 order_confirmation_router (Doc 3 roadmap) is the graph's third fan-out point, right after
 classify_confirmation_reply: confirmed jumps straight into generate_response (skipping
@@ -43,7 +49,11 @@ from reply_agent.graph.state import GraphState
 MAX_RETRIEVAL_ATTEMPTS = 2
 
 
-def load_context_router(state: GraphState) -> Literal["away", "pending_confirmation", "continue"]:
+def load_context_router(
+    state: GraphState,
+) -> Literal["agent_disabled", "away", "pending_confirmation", "continue"]:
+    if not state.get("business_agent_enabled", True):
+        return "agent_disabled"
     if state.get("business_is_away"):
         return "away"
     if state.get("pending_order") is not None:

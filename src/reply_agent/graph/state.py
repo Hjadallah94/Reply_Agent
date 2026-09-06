@@ -106,6 +106,11 @@ class GraphState(TypedDict):
     # "I'm not available today" (Doc 3 roadmap) — set unconditionally by load_context.py, read
     # by graph/routers.py's load_context_router (pure, no DB call of its own).
     business_is_away: NotRequired[bool]
+    # Agent on/off toggle (Doc 3 roadmap) — distinct from business_is_away above: this stops
+    # ALL automated replies so the owner can answer customers by hand, not just swap in an
+    # away message. Same fetch as business_is_away (load_context.py), same reader
+    # (load_context_router), checked with even higher priority.
+    business_agent_enabled: NotRequired[bool]
     # Business.escalation_rules (Doc 3 roadmap) — same load_context.py fetch, read by
     # risk_rules.py's evaluate_risk_gate via routers.py's blocks_auto_send (also pure).
     escalation_rules: NotRequired[dict]

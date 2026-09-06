@@ -266,3 +266,27 @@ async def test_no_op_when_order_has_no_channel_recorded(business, conversation):
         await _send_order_confirmation_nudge_async(str(order.id))
 
     mock_send.assert_not_called()
+
+
+async def test_no_op_when_business_has_agent_disabled(business, conversation):
+    """Doc 3 roadmap (agent on/off toggle) — the owner may switch to replying manually any
+    time between the order being placed and this job firing hours later; no automated message
+    should go out on their behalf while that's true.
+    """
+    order = await _seed_order(business.id, confirmation_status=OrderConfirmationStatus.pending)
+
+    async with get_sessionmaker()() as session:
+        db_business = await session.get(Business, business.id)
+        db_business.agent_enabled = False
+        await session.commit()
+
+    with patch(
+        "reply_agent.graph.nodes.send_reply.send_whatsapp_message", new=AsyncMock()
+    ) as mock_send:
+        await _send_order_confirmation_nudge_async(str(order.id))
+
+    mock_send.assert_not_called()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Order, order.id)
+        assert refreshed.confirmation_nudge_sent_at is None

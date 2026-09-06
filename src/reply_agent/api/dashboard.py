@@ -343,6 +343,27 @@ async def set_away_mode(
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
 
 
+@router.post("/businesses/{business_id}/agent-mode")
+async def set_agent_mode(
+    business_id: uuid.UUID,
+    # Default False, not True: an unchecked HTML checkbox is simply absent from the POST body,
+    # so this only ever falls back to the default when the box was unchecked (same reasoning as
+    # set_away_mode's is_away: bool = Form(False) above) — Form(True) would silently re-enable
+    # the agent on every submit where the owner just unchecked the box to turn it off.
+    agent_enabled: bool = Form(False),
+    business: Business = Depends(require_business_access),
+):
+    """Doc 3 roadmap (agent on/off toggle) — distinct from set_away_mode above: this stops ALL
+    automated replies (graph/routers.py's load_context_router, worker.py's confirmation nudge)
+    so the owner can answer their own customers by hand, not just swap in an away message.
+    """
+    async with tenant_session(business_id) as session:
+        db_business = await session.get(Business, business_id)
+        db_business.agent_enabled = agent_enabled
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard", status_code=303)
+
+
 @router.get("/businesses/{business_id}/dashboard/billing")
 async def billing_page(request: Request, business: Business = Depends(require_business_access)):
     async with tenant_session(business.id) as session:

@@ -107,6 +107,45 @@ async def test_writes_an_escalation_row(business, conversation):
         assert refreshed_conversation.status == ConversationStatus.owner_handled
 
 
+async def test_agent_disabled_reaches_escalation_with_override_reason_and_no_intent(
+    business, conversation
+):
+    """Doc 3 roadmap (agent on/off toggle) — routers.py's load_context_router routes here
+    directly when the owner has turned the agent off, before classify_intent/generate_response
+    ever run. load_context.py sets only escalation_override_reason, no intent/draft_reply at
+    all — proves escalate_to_owner (and its _escalation_reason helper) handles that minimal
+    shape correctly rather than assuming a fuller state always reaches it.
+    """
+    state = {
+        "business_id": str(business.id),
+        "thread_id": conversation.thread_id,
+        "message": {
+            "text": "Do you have this in blue?",
+            "media_refs": [],
+            "received_at": "2026-09-06T12:00:00Z",
+            "channel_message_id": "wamid.agent-disabled-test",
+        },
+        "escalation_override_reason": "Agent turned off — business is replying manually",
+    }
+
+    with (
+        patch("reply_agent.graph.nodes.escalate_to_owner.send_text_message", new=AsyncMock()),
+        patch("reply_agent.graph.nodes.escalate_to_owner.send_push_to_business", new=AsyncMock()),
+    ):
+        result = await escalate_to_owner(state)
+
+    assert result["route"] == "escalate"
+    assert result["escalation"]["reason"] == "Agent turned off — business is replying manually"
+
+    async with get_sessionmaker()() as session:
+        escalation = await session.scalar(
+            select(Escalation).where(Escalation.conversation_id == conversation.id)
+        )
+        assert escalation is not None
+        assert escalation.reason == "Agent turned off — business is replying manually"
+        assert escalation.drafted_reply is None
+
+
 async def test_push_notification_sent_alongside_whatsapp_ping(business, conversation):
     """Web Push (Doc 3 Phase 6.6) supplements, never replaces, the existing WhatsApp ping."""
     state = _state(business.id, conversation.thread_id)

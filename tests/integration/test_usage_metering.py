@@ -79,6 +79,41 @@ async def test_new_message_creates_subscription_and_increments_usage(conversatio
         assert subscription.message_usage_current_period == 1
 
 
+async def test_load_context_returns_agent_enabled_true_by_default(conversation):
+    """Doc 3 roadmap (agent on/off toggle) — Business.agent_enabled defaults True, so an
+    existing/newly-seeded business keeps routing through load_context_router's "continue"/
+    "away" branches exactly as before this toggle existed.
+    """
+    business, convo, customer = conversation
+
+    result = await load_context(
+        _state(business.id, customer.id, convo.thread_id, "hello", "wamid-usage-2")
+    )
+
+    assert result["business_agent_enabled"] is True
+    assert "escalation_override_reason" not in result
+
+
+async def test_load_context_sets_override_reason_when_agent_disabled(conversation):
+    business, convo, customer = conversation
+
+    async with get_sessionmaker()() as session:
+        db_business = await session.get(Business, business.id)
+        db_business.agent_enabled = False
+        await session.commit()
+
+    result = await load_context(
+        _state(business.id, customer.id, convo.thread_id, "hello", "wamid-usage-3")
+    )
+
+    assert result["business_agent_enabled"] is False
+    # Reused by escalate_to_owner._escalation_reason (graph/nodes/escalate_to_owner.py) once
+    # routers.py's load_context_router sends this run there directly.
+    assert (
+        result["escalation_override_reason"] == "Agent turned off — business is replying manually"
+    )
+
+
 async def test_redelivered_webhook_does_not_double_count(conversation):
     business, convo, customer = conversation
 

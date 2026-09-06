@@ -248,6 +248,34 @@ def test_load_context_router_away_takes_priority_over_pending_confirmation():
     assert load_context_router(state) == "away"
 
 
+def test_load_context_router_routes_agent_disabled_when_agent_not_enabled():
+    assert load_context_router({"business_agent_enabled": False}) == "agent_disabled"
+
+
+def test_load_context_router_defaults_to_continue_when_agent_enabled_key_missing():
+    # Missing key must default to enabled (True) — every state/test predating this toggle
+    # doesn't set the key at all and must keep routing exactly as before.
+    assert load_context_router({}) == "continue"
+
+
+def test_load_context_router_agent_disabled_takes_priority_over_away():
+    state = {"business_agent_enabled": False, "business_is_away": True}
+    assert load_context_router(state) == "agent_disabled"
+
+
+def test_load_context_router_agent_disabled_takes_priority_over_pending_confirmation():
+    state = {
+        "business_agent_enabled": False,
+        "business_is_away": False,
+        "pending_order": {
+            "id": "order-1",
+            "order_reference": "chat-abc123",
+            "delivery_window_promised": "3-4 hours",
+        },
+    }
+    assert load_context_router(state) == "agent_disabled"
+
+
 def test_order_confirmation_router_routes_by_decision():
     assert order_confirmation_router({"order_confirmation_decision": "confirmed"}) == "confirmed"
     assert order_confirmation_router({"order_confirmation_decision": "declined"}) == "declined"

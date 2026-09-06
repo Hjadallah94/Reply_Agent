@@ -465,6 +465,51 @@ async def test_away_mode_404s_for_unowned_business(client, escalation):
     assert response.status_code == 404
 
 
+# --- Agent on/off toggle (Doc 3 roadmap) ---------------------------------------------------
+
+
+async def test_agent_mode_turns_off(client, escalation):
+    business, _ = escalation
+    response = client.post(
+        f"/businesses/{business.id}/agent-mode",
+        data={},  # unchecked checkbox — absent from the form, same as is_away's own convention
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/businesses/{business.id}/dashboard"
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.agent_enabled is False
+
+
+async def test_agent_mode_turns_back_on(client, escalation):
+    business, _ = escalation
+    client.post(f"/businesses/{business.id}/agent-mode", data={}, follow_redirects=False)
+    await dispose_engines()
+
+    response = client.post(
+        f"/businesses/{business.id}/agent-mode",
+        data={"agent_enabled": "true"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, business.id)
+        assert refreshed.agent_enabled is True
+
+
+async def test_agent_mode_404s_for_unowned_business(client, escalation):
+    response = client.post(
+        "/businesses/00000000-0000-0000-0000-000000000000/agent-mode",
+        data={"agent_enabled": "true"},
+    )
+    assert response.status_code == 404
+
+
 async def test_business_dashboard_lists_the_escalation(client, escalation):
     business, esc = escalation
     response = client.get(f"/businesses/{business.id}/dashboard")

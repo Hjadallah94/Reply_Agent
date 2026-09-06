@@ -153,6 +153,14 @@ class Business(Base):
     # pipeline; see graph/routers.py's load_context_router and graph/nodes/send_away_reply.py.
     is_away: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     away_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Doc 3 roadmap (agent on/off toggle) — distinct from is_away above: away mode still
+    # auto-replies with away_message, this stops ALL automated replies (and the order-
+    # confirmation nudge, worker.py) so the owner can answer their own customers by hand.
+    # graph/routers.py's load_context_router checks this first, ahead of is_away, and routes
+    # straight to escalate_to_owner — reusing the existing "Needs your reply" queue and push
+    # notification (Phase 6f) rather than a silent no-op, so the owner actually finds out a
+    # message arrived. Defaults True: existing/seeded businesses keep working exactly as today.
+    agent_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

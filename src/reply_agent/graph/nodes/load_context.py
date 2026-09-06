@@ -101,7 +101,7 @@ async def load_context(state: GraphState) -> dict:
         for m in reversed(prior_messages)
     ]
 
-    return {
+    result: dict = {
         "conversation_history": history,
         "customer_profile": {
             "past_orders": [],
@@ -109,6 +109,7 @@ async def load_context(state: GraphState) -> dict:
             "prior_escalations": prior_escalation_count or 0,
         },
         "business_is_away": business.is_away,
+        "business_agent_enabled": business.agent_enabled,
         "escalation_rules": business.escalation_rules,
         "pending_order": (
             {
@@ -120,3 +121,13 @@ async def load_context(state: GraphState) -> dict:
             else None
         ),
     }
+
+    if not business.agent_enabled:
+        # Doc 3 roadmap (agent on/off toggle) — reuses the override-reason mechanism
+        # classify_confirmation_reply.py already established (escalate_to_owner._escalation_
+        # reason checks this first), so routers.py's load_context_router can route straight to
+        # escalate_to_owner with a real, specific reason instead of the generic "Escalated"
+        # fallback.
+        result["escalation_override_reason"] = "Agent turned off — business is replying manually"
+
+    return result

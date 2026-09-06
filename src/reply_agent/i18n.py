@@ -51,6 +51,27 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "ar": "رسالة مخصصة اختيارية (اتركها فارغة لاستخدام الرسالة الافتراضية)",
     },
     "dashboard.away_save": {"en": "Save", "ar": "حفظ"},
+    # Doc 3 roadmap (agent on/off toggle) — distinct card from away_* above: this stops ALL
+    # automated replies (not just swaps in an away message) so the owner can reply by hand.
+    "dashboard.agent_mode_heading": {"en": "AI agent", "ar": "الوكيل الذكي"},
+    "dashboard.agent_mode_status_on": {"en": "Replying automatically", "ar": "يرد تلقائياً"},
+    "dashboard.agent_mode_status_off": {"en": "Turned off", "ar": "متوقف"},
+    "dashboard.agent_mode_checkbox_label": {
+        "en": "Let the agent reply automatically",
+        "ar": "السماح للوكيل بالرد تلقائياً",
+    },
+    "dashboard.agent_mode_off_note": {
+        "en": (
+            "While off, no reply — including the order-confirmation follow-up — is sent "
+            "automatically. New messages still show up under “Needs your reply” for "
+            "you to answer yourself."
+        ),
+        "ar": (
+            "أثناء الإيقاف، لن يتم إرسال أي رد تلقائي — بما في ذلك متابعة تأكيد الطلب. "
+            "ستظهر الرسائل الجديدة ضمن “بحاجة لردك” لتقوم بالرد بنفسك."
+        ),
+    },
+    "dashboard.agent_mode_save": {"en": "Save", "ar": "حفظ"},
     "dashboard.usage_heading": {"en": "Usage this period", "ar": "الاستخدام لهذه الفترة"},
     "dashboard.over_cap": {"en": "Over cap", "ar": "تجاوز الحد"},
     "dashboard.messages_suffix": {"en": "messages", "ar": "رسالة"},

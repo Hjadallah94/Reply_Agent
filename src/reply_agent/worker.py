@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from reply_agent.channels.common import NormalizedInboundEvent
 from reply_agent.db.models import (
+    Business,
     Conversation,
     Customer,
     Message,
@@ -115,6 +116,7 @@ async def _send_order_confirmation_nudge_async(order_id: str) -> None:
     # reasoning as _process_inbound_message_async's own initial business lookup above).
     async with get_sessionmaker()() as session:
         order = await session.get(Order, order_uuid)
+        business = await session.get(Business, order.business_id) if order else None
 
     if order is None:
         logger.warning("Order confirmation nudge: order %s no longer exists", order_id)
@@ -126,6 +128,18 @@ async def _send_order_confirmation_nudge_async(order_id: str) -> None:
     if order.confirmation_nudge_sent_at is not None:
         # Idempotency guard — confirmation_status deliberately stays "pending" after a nudge
         # (never auto-cancel/escalate), so it alone can't signal "already nudged."
+        return
+    if business is not None and not business.agent_enabled:
+        # Doc 3 roadmap (agent on/off toggle) — the owner may have switched to replying
+        # manually any time between this order being placed and this job firing hours later;
+        # no automated message should go out on their behalf while that's true, same as new
+        # inbound messages no longer getting an automated reply (routers.py's
+        # load_context_router).
+        logger.info(
+            "Order confirmation nudge: business %s has the agent turned off, skipping order %s",
+            order.business_id,
+            order_id,
+        )
         return
 
     if order.channel is None:
