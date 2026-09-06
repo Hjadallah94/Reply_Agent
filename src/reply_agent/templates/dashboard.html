@@ -8,6 +8,9 @@
     <span class="badge resolved">{{ t('dashboard.whatsapp_connected') }}</span>
   {% else %}
     <a class="export-link" href="/onboarding/whatsapp?business_id={{ business.id }}">{{ t('dashboard.connect_whatsapp') }}</a>
+    {% if business.requested_whatsapp_number %}
+      <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.whatsapp_number_on_file') }}: {{ business.requested_whatsapp_number }}</span>
+    {% endif %}
   {% endif %}
   {% if business.channels_connected.messenger %}
     <span class="badge resolved">{{ t('dashboard.messenger_connected') }}</span>

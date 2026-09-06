@@ -32,10 +32,12 @@ async def signup_submit(
     business_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    whatsapp_number: str = Form(""),
     accept_terms: bool = Form(False),
 ):
     business_name = business_name.strip()
     email = email.strip().lower()
+    whatsapp_number = whatsapp_number.strip()
 
     if not business_name or not email or len(password) < 8:
         return templates.TemplateResponse(
@@ -54,7 +56,11 @@ async def signup_submit(
         )
 
     async with get_sessionmaker()() as session:
-        business = Business(name=business_name, plan_tier=PlanTier.starter)
+        business = Business(
+            name=business_name,
+            plan_tier=PlanTier.starter,
+            requested_whatsapp_number=whatsapp_number or None,
+        )
         session.add(business)
         await session.flush()
 

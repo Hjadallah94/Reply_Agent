@@ -130,6 +130,13 @@ class Business(Base):
     # different Facebook accounts for WhatsApp vs. Page login — an accepted MVP limitation
     # (Doc 1's target seller is solo/small, one person doing both).
     facebook_user_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Doc 3 roadmap (public subscribe page) — the number a new subscriber typed in at signup
+    # (api/auth.py's signup_submit), not a live connection. Deliberately separate from
+    # channels_connected, which means "actually Meta-connected and usable for sending/
+    # receiving" (context_resolution.py, send_reply.py) — Meta's Embedded Signup config IDs
+    # aren't set up yet, so this is purely informational until OptiGnosis completes the real
+    # Meta wiring with this business by hand, same manual-stopgap pattern as billing.
+    requested_whatsapp_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     plan_tier: Mapped[PlanTier] = mapped_column(
         Enum(PlanTier, name="plan_tier"), nullable=False, default=PlanTier.starter
     )

@@ -50,6 +50,7 @@ async def test_signup_creates_business_and_logs_in(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "whatsapp_number": "962 79 000 0000",
             "accept_terms": "true",
         },
         follow_redirects=False,
@@ -67,6 +68,30 @@ async def test_signup_creates_business_and_logs_in(client):
         assert user is not None
         assert user.business.name == BUSINESS_NAME
         assert user.accepted_terms_at is not None
+        # Doc 3 roadmap (public subscribe page) — manual entry only, never wired into
+        # channels_connected (see db/models.py's docstring on the new column).
+        assert user.business.requested_whatsapp_number == "962 79 000 0000"
+
+
+async def test_signup_leaves_whatsapp_number_unset_when_omitted(client):
+    response = client.post(
+        "/signup",
+        data={
+            "business_name": BUSINESS_NAME,
+            "email": SIGNUP_EMAIL,
+            "password": "a-strong-password",
+            "accept_terms": "true",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    await dispose_engines()
+
+    user = await _user_for(BUSINESS_NAME)
+    assert user is not None
+    async with get_sessionmaker()() as session:
+        business = await session.get(Business, user.business_id)
+        assert business.requested_whatsapp_number is None
 
 
 async def test_signup_rejects_duplicate_email(client):

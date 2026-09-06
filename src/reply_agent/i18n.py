@@ -26,6 +26,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "dashboard.back_all_businesses": {"en": "All businesses", "ar": "جميع الأعمال"},
     "dashboard.whatsapp_connected": {"en": "WhatsApp connected", "ar": "واتساب متصل"},
     "dashboard.connect_whatsapp": {"en": "Connect WhatsApp", "ar": "ربط واتساب"},
+    # Doc 3 roadmap (public subscribe page) — shown next to connect_whatsapp above when a
+    # number was submitted at signup (Business.requested_whatsapp_number) but isn't actually
+    # Meta-connected yet. Label only, same pattern as billing.reference_label — the dynamic
+    # number itself is placed separately in the template markup, not embedded in the string.
+    "dashboard.whatsapp_number_on_file": {
+        "en": "Number on file (pending connection)",
+        "ar": "الرقم المسجل (بانتظار الربط)",
+    },
     "dashboard.messenger_connected": {"en": "Messenger connected", "ar": "ماسنجر متصل"},
     "dashboard.connect_messenger": {"en": "Connect Facebook Page", "ar": "ربط صفحة فيسبوك"},
     "dashboard.instagram_connected": {"en": "Instagram connected", "ar": "إنستغرام متصل"},
