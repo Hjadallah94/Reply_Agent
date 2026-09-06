@@ -2,19 +2,272 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Reply Agent</title>
+<title>Reply Agent — AI replies for WhatsApp, Instagram &amp; Messenger</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Reply Agent answers your customers' WhatsApp, Instagram, and Messenger DMs automatically, and hands you anything it isn't sure about. Built by OptiGnosis for small sellers in Jordan.">
 <style>
-  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; max-width: 780px; margin: 60px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
-  a { color: #0a58ca; }
+  :root {
+    --bg: #f4f6f7;
+    --surface: #ffffff;
+    --border: #d9e1e3;
+    --text: #151f21;
+    --text-muted: #5c6c6f;
+    /* Same teal-navy sampled from the OptiGnosis logo used throughout the app itself
+       (src/reply_agent/templates/base.html) — brand identity, not a generic accent. */
+    --accent: #115662;
+    --accent-fg: #ffffff;
+    --accent-soft: #e5eff0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1a1e;
+      --surface: #142529;
+      --border: #263c40;
+      --text: #e6eff0;
+      --text-muted: #93a5a7;
+      --accent: #4fa8bd;
+      --accent-fg: #06141a;
+      --accent-soft: #1a2f34;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+  header.site {
+    padding: 22px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  header.site .wrap { display: flex; align-items: baseline; justify-content: space-between; }
+  .wordmark { font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+  .wordmark span { color: var(--text-muted); font-weight: 400; font-size: 0.85em; }
+  header.site nav a { color: var(--text-muted); text-decoration: none; margin-left: 20px; font-size: 0.92rem; }
+  header.site nav a:hover { color: var(--accent); }
+
+  .hero { padding: 64px 0 48px; }
+  .hero h1 { font-size: 2.1rem; line-height: 1.25; margin: 0 0 16px; text-wrap: balance; max-width: 20ch; }
+  .hero p.lead { font-size: 1.1rem; color: var(--text-muted); max-width: 52ch; margin: 0 0 28px; }
+
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-fg);
+    padding: 12px 22px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.98rem;
+  }
+  .btn:hover { opacity: 0.92; }
+  .btn.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .cta-note { font-size: 0.85rem; color: var(--text-muted); margin: 14px 0 0; }
+
+  section { padding: 40px 0; border-top: 1px solid var(--border); }
+  section > h2 { font-size: 1.4rem; margin: 0 0 8px; }
+  section > p.section-lead { color: var(--text-muted); margin: 0 0 28px; max-width: 60ch; }
+
+  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .channel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .channel-card h3 { margin: 0 0 8px; font-size: 1.02rem; }
+  .channel-card p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .channel-note {
+    margin-top: 20px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .tier-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .tier-card.featured { border-color: var(--accent); border-width: 2px; position: relative; }
+  .tier-card .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  .tier-card h3 { margin: 0 0 4px; font-size: 1.1rem; }
+  .tier-card .price { font-size: 1.7rem; font-weight: 700; margin: 10px 0 2px; }
+  .tier-card .price small { font-size: 0.95rem; font-weight: 400; color: var(--text-muted); }
+  .tier-card .cap { color: var(--text-muted); font-size: 0.88rem; margin: 0 0 18px; }
+  .tier-card .btn { margin-top: auto; text-align: center; }
+
+  .how { counter-reset: step; padding-left: 0; margin: 0; list-style: none; }
+  .how li {
+    counter-increment: step;
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+  }
+  .how li::before {
+    content: counter(step);
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .how li p { margin: 0; color: var(--text-muted); }
+  .how li strong { display: block; color: var(--text); margin-bottom: 2px; }
+
+  footer { border-top: 1px solid var(--border); padding: 28px 0 40px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; justify-content: space-between; }
+  footer p { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
+  footer ul { list-style: none; display: flex; gap: 18px; padding: 0; margin: 0; }
+  footer a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; }
+  footer a:hover { color: var(--accent); }
 </style>
 </head>
 <body>
-<h1>Reply Agent</h1>
-<p>An AI assistant that replies to Instagram, WhatsApp, and Facebook Messenger DMs for solo and small online sellers in Jordan — operated by OptiGnosis Limited.</p>
-<ul>
-  <li><a href="privacy-policy.html">Privacy Policy</a></li>
-  <li><a href="terms-of-service.html">Terms of Service</a></li>
-</ul>
+
+<header class="site">
+  <div class="wrap">
+    <a class="wordmark" href="#">Reply Agent <span>by OptiGnosis</span></a>
+    <nav>
+      <a href="#pricing">Pricing</a>
+      <a href="https://reply-agent-web-staging.onrender.com/login">Log in</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <h1>Your DMs get answered even when you can't get to your phone.</h1>
+  <p class="lead">
+    Reply Agent reads the WhatsApp, Instagram, and Messenger messages your customers send you,
+    answers the ones it can from your own catalog and policies, and hands you anything it isn't
+    sure about &mdash; with a drafted reply ready to go, not just an alert.
+  </p>
+  <div class="cta-row">
+    <a class="btn" href="https://reply-agent-web-staging.onrender.com/signup">Get started</a>
+    <a class="btn secondary" href="#pricing">See pricing</a>
+  </div>
+  <p class="cta-note">No contract. Cancel any time. Set up takes a few minutes.</p>
+</div>
+
+<section>
+  <h2>Wherever your customers already message you</h2>
+  <p class="section-lead">
+    Connect one channel or all three &mdash; the agent answers the same way on each, using the
+    same catalog and rules you set once.
+  </p>
+  <div class="channels">
+    <div class="channel-card">
+      <h3>WhatsApp</h3>
+      <p>The most common one in Jordan. Connects to your existing WhatsApp Business number.</p>
+    </div>
+    <div class="channel-card">
+      <h3>Instagram</h3>
+      <p>Answers DMs on the account you already post to, no separate inbox to check.</p>
+    </div>
+    <div class="channel-card">
+      <h3>Messenger</h3>
+      <p>Covers customers who message your Facebook Page instead of WhatsApp.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <ol class="how">
+    <li>
+      <div>
+        <strong>Tell it about your business.</strong>
+        <p>Your product catalog, prices, delivery areas, and policies &mdash; the agent only ever answers from what you've actually told it.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>It replies to the easy ones.</strong>
+        <p>Availability, prices, delivery windows, order confirmations &mdash; answered right away, any time of day.</p>
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>You handle the rest.</strong>
+        <p>Complaints, unusual requests, anything it isn't confident about &mdash; escalated to you with a suggested reply, never guessed.</p>
+      </div>
+    </li>
+  </ol>
+  <p class="channel-note">
+    Prefer to answer everyone yourself sometimes? You can switch the agent off for any or all of
+    your channels whenever you want, and switch it back on later &mdash; nothing is deleted or
+    disconnected.
+  </p>
+</section>
+
+<section id="pricing">
+  <h2>Pricing</h2>
+  <p class="section-lead">
+    One flat monthly rate per tier, in Jordanian Dinar. No per-message charges unless you go over
+    your plan's message cap for the month.
+  </p>
+  <div class="tiers">
+    <div class="tier-card">
+      <h3>Starter</h3>
+      <p class="price">10 <small>JOD / month</small></p>
+      <p class="cap">Up to 400 customer messages / month</p>
+      <a class="btn secondary" href="https://reply-agent-web-staging.onrender.com/signup">Get started</a>
+    </div>
+    <div class="tier-card featured">
+      <p class="eyebrow">Most popular</p>
+      <h3>Growth</h3>
+      <p class="price">25 <small>JOD / month</small></p>
+      <p class="cap">Up to 1,500 customer messages / month</p>
+      <a class="btn" href="https://reply-agent-web-staging.onrender.com/signup">Get started</a>
+    </div>
+    <div class="tier-card">
+      <h3>Pro</h3>
+      <p class="price">45 <small>JOD / month</small></p>
+      <p class="cap">Up to 5,000 customer messages / month</p>
+      <a class="btn secondary" href="https://reply-agent-web-staging.onrender.com/signup">Get started</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>&copy; 2026 OptiGnosis Limited. Reply Agent is operated by OptiGnosis Limited.</p>
+    <ul>
+      <li><a href="privacy-policy.html">Privacy Policy</a></li>
+      <li><a href="terms-of-service.html">Terms of Service</a></li>
+    </ul>
+  </div>
+</footer>
+
 </body>
 </html>
