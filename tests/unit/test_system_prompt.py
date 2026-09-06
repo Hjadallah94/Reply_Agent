@@ -56,3 +56,13 @@ def test_base_prompt_names_arabizi_explicitly():
 
 def test_base_prompt_instructs_asking_for_clarification_when_ambiguous():
     assert "ask a short, specific clarifying" in BASE_SYSTEM_PROMPT
+
+
+def test_brand_voice_examples_do_not_override_the_customers_own_language():
+    """Live-testing bug (souvenir-shop demo, 2026-09-06): an English customer message got an
+    Arabic reply — the brand-voice examples (which happened to skew Arabic) pulled the reply's
+    language along with its tone. This must say explicitly not to do that.
+    """
+    prompt = _prompt(brand_voice_examples=["Customer: hi\nSeller: مرحبا فيك!"])
+    assert "don't copy their language" in prompt
+    assert "language rule above" in prompt

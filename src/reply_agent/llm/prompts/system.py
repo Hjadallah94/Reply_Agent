@@ -38,8 +38,16 @@ def build_system_prompt(
         parts.extend(f"- {rule}" for rule in custom_rules)
 
     if brand_voice_examples:
+        # Live-testing found a real bug this fixes: examples happening to skew toward one
+        # language (a real seller's own samples will often lean Arabic, since that's who they
+        # mostly talk to) pulled replies toward that language even for an English-speaking
+        # customer, overriding the "reply in the customer's own language" rule above. These
+        # examples are for TONE ONLY — never let them decide which language to reply in.
         parts.append(
-            "\nExamples of this seller's own tone (match this style, don't copy verbatim):"
+            "\nExamples of this seller's own tone (match the warmth/style, don't copy "
+            "verbatim, and don't copy their language either — these examples may be in a "
+            "different language than this customer is using; always follow the language rule "
+            "above, not whatever language happens to dominate these examples):"
         )
         parts.extend(f"- {example}" for example in brand_voice_examples)
 
