@@ -145,6 +145,7 @@ async def approval(client):
             delivery_address="Sweifieh, Amman",
             delivery_window_promised="3-4 hours",
             delivery_status="pending",
+            channel=ChannelType.whatsapp,
         )
         session.add(order)
 
@@ -541,6 +542,40 @@ async def test_escalation_detail_shows_draft_and_reason(client, escalation):
     assert "Can I get a refund?" in response.text
 
 
+async def test_escalation_detail_shows_customer_context(client, escalation):
+    """Doc 3 roadmap (found live, souvenir-shop demo 2026-09-06) — this customer's only
+    escalation is the one being viewed right now, so it must not count itself as "prior".
+    """
+    business, esc = escalation
+    response = client.get(f"/businesses/{business.id}/dashboard/escalations/{esc.id}")
+    assert response.status_code == 200
+    assert "No prior escalations" in response.text
+    assert "No past orders on file." in response.text
+
+
+async def test_escalation_detail_customer_context_counts_other_escalations_not_itself(
+    client, escalation
+):
+    business, esc = escalation
+    async with get_sessionmaker()() as session:
+        conv = await session.get(Conversation, esc.conversation_id)
+        session.add(
+            Escalation(
+                conversation_id=conv.id,
+                reason="an earlier, already-resolved escalation",
+                status=EscalationStatus.resolved,
+            )
+        )
+        await session.commit()
+    # Same cross-loop issue every other test in this file disposes around — this test's own
+    # extra session block above closed just before the client.get() call below.
+    await dispose_engines()
+
+    response = client.get(f"/businesses/{business.id}/dashboard/escalations/{esc.id}")
+    assert response.status_code == 200
+    assert "1 prior escalation(s) from this customer" in response.text
+
+
 async def test_resolve_sends_updates_db_and_redirects(client, escalation):
     business, esc = escalation
 
@@ -758,6 +793,18 @@ async def test_approval_detail_shows_draft_and_reasoning(client, approval):
     assert "0 order(s) already pending today" in response.text
     assert "We can get that to you in 3-4 hours today." in response.text
     assert "2 boxes of chocolate chip to Sweifieh please" in response.text
+
+
+async def test_approval_detail_shows_customer_context_with_past_order(client, approval):
+    """Doc 3 roadmap (found live, souvenir-shop demo 2026-09-06) — the approval fixture's own
+    seeded Order (the one this very approval is about) should show up as a past order.
+    """
+    business, appr = approval
+    response = client.get(f"/businesses/{business.id}/dashboard/approvals/{appr.id}")
+    assert response.status_code == 200
+    assert "Past orders" in response.text
+    assert "chat-test1234" in response.text
+    assert "No prior escalations" in response.text
 
 
 async def test_approve_sends_updates_db_and_redirects(client, approval):

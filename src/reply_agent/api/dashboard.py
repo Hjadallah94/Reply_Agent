@@ -714,6 +714,55 @@ async def export_conversations(business: Business = Depends(require_business_acc
     )
 
 
+async def _customer_context(
+    session, customer: Customer, *, exclude_escalation_id: uuid.UUID | None = None
+) -> dict:
+    """Doc 3 roadmap (found live, souvenir-shop demo 2026-09-06) — escalation.html/approval.html
+    only ever showed the current conversation's own thread, with nothing about who this
+    customer actually is: how long they've been a customer, whether they've needed escalating
+    before, or what they've ordered previously. Shared by both resolution pages since they had
+    the identical gap.
+
+    exclude_escalation_id: escalation_detail's own escalation row is itself an Escalation for
+    this customer — without excluding it, a first-time escalation would misleadingly count as
+    1 "prior" escalation. approval_detail has no equivalent (an ApprovalRequest is a different
+    table, never counted here), so it never needs to pass this.
+
+    Past orders are looked up by phone the same way retrieve_knowledge.py's order-status
+    lookup and worker.py's confirmation nudge are — customer_phone isn't phone-shaped for
+    Instagram/Messenger (it's an opaque IGSID/PSID), so this naturally returns nothing for
+    those rather than a wrong match, same reasoning as elsewhere in this codebase.
+    """
+    escalation_count_query = (
+        select(func.count())
+        .select_from(Escalation)
+        .join(Conversation, Escalation.conversation_id == Conversation.id)
+        .where(Conversation.customer_id == customer.id)
+    )
+    if exclude_escalation_id is not None:
+        escalation_count_query = escalation_count_query.where(
+            Escalation.id != exclude_escalation_id
+        )
+    prior_escalation_count = await session.scalar(escalation_count_query)
+    past_orders = (
+        await session.scalars(
+            select(Order)
+            .where(
+                Order.business_id == customer.business_id,
+                Order.customer_phone == customer.channel_handle,
+                Order.channel == customer.channel,
+            )
+            .order_by(Order.order_date.desc().nulls_last())
+            .limit(5)
+        )
+    ).all()
+    return {
+        "customer_since": customer.created_at,
+        "prior_escalation_count": prior_escalation_count or 0,
+        "past_orders": past_orders,
+    }
+
+
 @router.get("/businesses/{business_id}/dashboard/escalations/{escalation_id}")
 async def escalation_detail(
     request: Request,
@@ -741,6 +790,9 @@ async def escalation_detail(
             }
             for m in conversation.messages
         ]
+        customer_context = await _customer_context(
+            session, conversation.customer, exclude_escalation_id=escalation.id
+        )
 
     return await _render(
         request,
@@ -750,6 +802,7 @@ async def escalation_detail(
         customer_handle=conversation.customer.channel_handle,
         channel=conversation.channel.value,
         messages=messages,
+        customer_context=customer_context,
     )
 
 
@@ -863,6 +916,7 @@ async def approval_detail(
             }
             for m in conversation.messages
         ]
+        customer_context = await _customer_context(session, conversation.customer)
 
     lang = get_lang(request)
     return await _render(
@@ -873,6 +927,7 @@ async def approval_detail(
         customer_handle=conversation.customer.channel_handle,
         channel=conversation.channel.value,
         messages=messages,
+        customer_context=customer_context,
         reject_default=t(lang, "approval.reject_default_text"),
     )
 

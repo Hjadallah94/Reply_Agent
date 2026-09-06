@@ -6,6 +6,30 @@
 
 <div class="reason">{{ escalation.reason }}</div>
 
+<div class="card" style="margin-bottom: 16px;">
+  <div class="row">
+    <strong>{{ t('customer_context.heading') }}</strong>
+    <span class="muted">{{ t('customer_context.customer_since') }} {{ customer_context.customer_since.strftime('%Y-%m-%d') }}</span>
+  </div>
+  <p class="muted" style="margin: 6px 0 0;">
+    {% if customer_context.prior_escalation_count == 0 %}
+      {{ t('customer_context.prior_escalations_zero') }}
+    {% else %}
+      {{ customer_context.prior_escalation_count }} {{ t('customer_context.prior_escalations_some') }}
+    {% endif %}
+  </p>
+  {% if customer_context.past_orders %}
+    <p class="muted" style="margin: 10px 0 4px;"><strong>{{ t('customer_context.past_orders_heading') }}:</strong></p>
+    <ul style="margin: 0; padding-left: 18px;">
+      {% for o in customer_context.past_orders %}
+      <li class="muted">{{ o.order_reference }} — {{ o.status }}{% if o.order_date %} ({{ o.order_date.strftime('%Y-%m-%d') }}){% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted" style="margin: 10px 0 0;">{{ t('customer_context.no_past_orders') }}</p>
+  {% endif %}
+</div>
+
 <div class="thread">
   {% for m in messages %}
   <div class="bubble {{ 'customer' if m.direction == 'inbound' else 'agent' }}">

@@ -101,6 +101,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "dashboard.download_excel": {"en": "Download as Excel", "ar": "تنزيل كملف إكسل"},
     "dashboard.no_conversations": {"en": "No conversations yet.", "ar": "لا توجد محادثات بعد."},
+    # --- shared by escalation.html and approval.html (Doc 3 roadmap, found live in the
+    # souvenir-shop demo 2026-09-06 — both resolution pages only ever showed the current
+    # thread, nothing about who this customer actually is) ---
+    "customer_context.heading": {"en": "About this customer", "ar": "عن هذا الزبون"},
+    "customer_context.customer_since": {"en": "Customer since", "ar": "زبون منذ"},
+    "customer_context.prior_escalations_zero": {
+        "en": "No prior escalations — this is their first.",
+        "ar": "لا توجد تصعيدات سابقة — هذه هي الأولى.",
+    },
+    "customer_context.prior_escalations_some": {
+        "en": "prior escalation(s) from this customer",
+        "ar": "تصعيد (تصعيدات) سابقة من هذا الزبون",
+    },
+    "customer_context.past_orders_heading": {"en": "Past orders", "ar": "الطلبات السابقة"},
+    "customer_context.no_past_orders": {
+        "en": "No past orders on file.",
+        "ar": "لا توجد طلبات سابقة.",
+    },
     # --- escalation.html ---
     "escalation.send_reply": {"en": "Send reply", "ar": "إرسال الرد"},
     # --- approval.html ---
