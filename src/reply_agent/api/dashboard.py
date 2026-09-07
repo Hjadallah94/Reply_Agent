@@ -26,7 +26,7 @@ from reply_agent.auth.dependencies import (
     get_current_user,
     require_business_access,
 )
-from reply_agent.billing.tiers import CATALOG_LIMIT, MESSAGE_CAPS, TIER_PRICE_JOD
+from reply_agent.billing.tiers import CATALOG_LIMIT, CHANNELS_INCLUDED, MESSAGE_CAPS, TIER_PRICE_JOD
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.config import get_settings
 from reply_agent.db.models import (
@@ -326,6 +326,10 @@ async def business_dashboard(
         pending_approvals=pending_approval_rows,
         recent_auto_approvals=recent_auto_approval_rows,
         conversations=conversation_rows,
+        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — the toolbar's own upsell copy
+        # reads this instead of re-deriving tier logic in Jinja, so it can never drift from what
+        # onboarding.py's page_signup_callback actually enforces.
+        channels_included=CHANNELS_INCLUDED[business.plan_tier],
     )
 
 

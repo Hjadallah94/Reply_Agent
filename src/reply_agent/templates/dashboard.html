@@ -14,11 +14,15 @@
   {% endif %}
   {% if business.channels_connected.messenger %}
     <span class="badge resolved">{{ t('dashboard.messenger_connected') }}</span>
-  {% else %}
+  {% elif 'messenger' in channels_included %}
     <a class="export-link" href="/onboarding/page?business_id={{ business.id }}">{{ t('dashboard.connect_messenger') }}</a>
+  {% else %}
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.messenger_upsell') }}</span>
   {% endif %}
   {% if business.channels_connected.instagram %}
     <span class="badge resolved">{{ t('dashboard.instagram_connected') }}</span>
+  {% elif 'messenger' in channels_included and 'instagram' not in channels_included %}
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.instagram_upsell') }}</span>
   {% endif %}
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/catalog">{{ t('dashboard.manage_catalog') }}</a>
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/rules">{{ t('dashboard.manage_rules') }}</a>

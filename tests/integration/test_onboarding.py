@@ -11,12 +11,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from reply_agent.api.app import app
-from reply_agent.db.models import Business
+from reply_agent.db.models import Business, PlanTier
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.onboarding.whatsapp_signup import EmbeddedSignupError
 from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Onboarding Test Business"
+GROWTH_BUSINESS_NAME = "Onboarding Test Business (Growth)"
+PRO_BUSINESS_NAME = "Onboarding Test Business (Pro)"
 
 
 @pytest.fixture
@@ -30,6 +32,28 @@ async def business(client):
     yield b
     # The test body made its own TestClient calls after create_logged_in_business's own
     # dispose — same cross-loop issue, dispose again before this fixture's own DB access.
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        await session.execute(delete(Business).where(Business.id == b.id))
+        await session.commit()
+
+
+@pytest.fixture
+async def growth_business(client):
+    # Doc 3 roadmap (real tier differentiation, 2026-09-07) — Growth includes Messenger but not
+    # Instagram (billing/tiers.py's CHANNELS_INCLUDED).
+    b = await create_logged_in_business(client, GROWTH_BUSINESS_NAME, plan_tier=PlanTier.growth)
+    yield b
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        await session.execute(delete(Business).where(Business.id == b.id))
+        await session.commit()
+
+
+@pytest.fixture
+async def pro_business(client):
+    b = await create_logged_in_business(client, PRO_BUSINESS_NAME, plan_tier=PlanTier.pro)
+    yield b
     await dispose_engines()
     async with get_sessionmaker()() as session:
         await session.execute(delete(Business).where(Business.id == b.id))
@@ -126,7 +150,7 @@ async def test_page_signup_page_renders(client, business):
     assert business.name in response.text
 
 
-async def test_page_callback_saves_messenger_and_instagram(client, business):
+async def test_page_callback_saves_messenger_and_instagram(client, pro_business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -150,7 +174,7 @@ async def test_page_callback_saves_messenger_and_instagram(client, business):
     ):
         response = client.post(
             "/onboarding/page/callback",
-            json={"business_id": str(business.id), "code": "the-code"},
+            json={"business_id": str(pro_business.id), "code": "the-code"},
         )
 
     assert response.status_code == 200
@@ -160,13 +184,13 @@ async def test_page_callback_saves_messenger_and_instagram(client, business):
     await dispose_engines()
 
     async with get_sessionmaker()() as session:
-        refreshed = await session.get(Business, business.id)
+        refreshed = await session.get(Business, pro_business.id)
         assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
         assert refreshed.channels_connected["instagram"] == {"page_id": "page-123"}
         assert refreshed.facebook_user_id == "fb-user-456"
 
 
-async def test_page_callback_skips_instagram_when_not_linked(client, business):
+async def test_page_callback_skips_instagram_when_not_linked(client, pro_business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -188,7 +212,7 @@ async def test_page_callback_skips_instagram_when_not_linked(client, business):
     ):
         response = client.post(
             "/onboarding/page/callback",
-            json={"business_id": str(business.id), "code": "the-code"},
+            json={"business_id": str(pro_business.id), "code": "the-code"},
         )
 
     assert response.status_code == 200
@@ -197,12 +221,64 @@ async def test_page_callback_skips_instagram_when_not_linked(client, business):
     await dispose_engines()
 
     async with get_sessionmaker()() as session:
-        refreshed = await session.get(Business, business.id)
+        refreshed = await session.get(Business, pro_business.id)
         assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
         assert "instagram" not in refreshed.channels_connected
 
 
-async def test_page_callback_502s_when_multiple_pages_granted(client, business):
+async def test_page_callback_leaves_instagram_unset_for_growth_even_when_linked(
+    client, growth_business
+):
+    """Doc 3 roadmap (real tier differentiation, 2026-09-07) — Growth unlocks the Page-connection
+    flow but only activates the Messenger half of it; Instagram stays Pro-only even when the
+    connected Page actually has one linked, so the business isn't silently given a channel it
+    isn't paying for.
+    """
+    with (
+        patch(
+            "reply_agent.api.onboarding.exchange_code_for_token",
+            new=AsyncMock(return_value="business-token"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_single_page_id",
+            new=AsyncMock(return_value="page-123"),
+        ),
+        patch(
+            "reply_agent.api.onboarding.get_linked_instagram_account_id",
+            new=AsyncMock(return_value="ig-456"),
+        ),
+        patch("reply_agent.api.onboarding.subscribe_page_to_app", new=AsyncMock()),
+        patch(
+            "reply_agent.api.onboarding.get_authorizing_user_id",
+            new=AsyncMock(return_value="fb-user-321"),
+        ),
+    ):
+        response = client.post(
+            "/onboarding/page/callback",
+            json={"business_id": str(growth_business.id), "code": "the-code"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "instagram_connected": False}
+
+    await dispose_engines()
+
+    async with get_sessionmaker()() as session:
+        refreshed = await session.get(Business, growth_business.id)
+        assert refreshed.channels_connected["messenger"] == {"page_id": "page-123"}
+        assert "instagram" not in refreshed.channels_connected
+
+
+async def test_page_callback_rejects_starter_business(client, business):
+    response = client.post(
+        "/onboarding/page/callback",
+        json={"business_id": str(business.id), "code": "the-code"},
+    )
+    assert response.status_code == 400
+    assert "upgrade" in response.text.lower()
+
+
+async def test_page_callback_502s_when_multiple_pages_granted(client, pro_business):
     with (
         patch(
             "reply_agent.api.onboarding.exchange_code_for_token",
@@ -215,7 +291,7 @@ async def test_page_callback_502s_when_multiple_pages_granted(client, business):
     ):
         response = client.post(
             "/onboarding/page/callback",
-            json={"business_id": str(business.id), "code": "the-code"},
+            json={"business_id": str(pro_business.id), "code": "the-code"},
         )
 
     assert response.status_code == 502

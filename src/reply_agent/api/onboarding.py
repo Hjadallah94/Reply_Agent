@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from reply_agent.auth.dependencies import ensure_business_access, require_business_access
+from reply_agent.billing.tiers import CHANNELS_INCLUDED
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
 from reply_agent.db.tenant_session import tenant_session
@@ -116,6 +117,19 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
     async with tenant_session(payload.business_id) as session:
         business = await session.get(Business, payload.business_id)
 
+        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — Messenger/Instagram are a
+        # Growth+ feature (billing/tiers.py's CHANNELS_INCLUDED). Checked before spending a Meta
+        # API round trip on a plan that can't use the result; templates/dashboard.html's toolbar
+        # is the primary signal a Starter owner sees, this is the backend's safety net.
+        if "messenger" not in CHANNELS_INCLUDED[business.plan_tier]:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Your {business.plan_tier.value} plan doesn't include Messenger — "
+                    "upgrade to Growth or Pro to connect a Facebook Page."
+                ),
+            )
+
         try:
             token = await exchange_code_for_token(payload.code)
             page_id = await get_single_page_id(token)
@@ -128,9 +142,16 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
         except EmbeddedSignupError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+        # Instagram is Pro-only: a Growth business's Page may well have one linked, but we leave
+        # it out of channels_connected and report instagram_connected: False so the UI can
+        # truthfully say "upgrade to Pro" rather than silently dropping a channel it detected.
+        instagram_included = "instagram" in CHANNELS_INCLUDED[business.plan_tier]
         channels_connected = {**business.channels_connected, "messenger": {"page_id": page_id}}
-        if instagram_account_id:
+        if instagram_account_id and instagram_included:
             channels_connected["instagram"] = {"page_id": page_id}
         business.channels_connected = channels_connected
 
-    return {"connected": True, "instagram_connected": bool(instagram_account_id)}
+    return {
+        "connected": True,
+        "instagram_connected": bool(instagram_account_id and instagram_included),
+    }

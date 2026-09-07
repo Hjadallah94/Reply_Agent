@@ -36,7 +36,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "dashboard.messenger_connected": {"en": "Messenger connected", "ar": "ماسنجر متصل"},
     "dashboard.connect_messenger": {"en": "Connect Facebook Page", "ar": "ربط صفحة فيسبوك"},
+    "dashboard.messenger_upsell": {
+        "en": "Messenger & Instagram — upgrade to Growth or Pro",
+        "ar": "ماسنجر وإنستغرام — قم بالترقية إلى Growth أو Pro",
+    },
     "dashboard.instagram_connected": {"en": "Instagram connected", "ar": "إنستغرام متصل"},
+    "dashboard.instagram_upsell": {
+        "en": "Instagram — upgrade to Pro",
+        "ar": "إنستغرام — قم بالترقية إلى Pro",
+    },
     "dashboard.manage_catalog": {"en": "Manage catalog", "ar": "إدارة الكتالوج"},
     "dashboard.manage_rules": {"en": "Rules & Autonomy", "ar": "القواعد والاستقلالية"},
     "dashboard.away_heading": {"en": "Availability", "ar": "التوفر"},
