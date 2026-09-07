@@ -23,3 +23,29 @@ OVERAGE_RATE_JOD: dict[PlanTier, float] = {
     PlanTier.growth: 0.015,
     PlanTier.pro: 0.012,
 }
+
+# Doc 3 roadmap (real tier differentiation, 2026-09-07) — max products a business can list.
+# None = unlimited. Proposed defaults, not derived from real usage data yet — adjust once real
+# catalogs give a sense of what's actually needed. Enforced in api/dashboard.py's
+# create_product_route; deliberately not retroactive (an existing business already over a newly
+# -introduced cap keeps its existing products — only new creates are blocked), same convention
+# as every other billing change in this codebase never touching existing data.
+CATALOG_LIMIT: dict[PlanTier, int | None] = {
+    PlanTier.starter: 20,
+    PlanTier.growth: 100,
+    PlanTier.pro: None,
+}
+
+# Doc 3 roadmap (real tier differentiation, 2026-09-07) — which channels a tier can connect.
+# The source of truth api/onboarding.py's page_signup_callback, templates/dashboard.html's
+# toolbar, and the signup/billing tier-comparison cards all read from, so they can never drift
+# from each other. Messenger and Instagram are listed separately even though connecting a
+# Facebook Page is one bundled flow that yields both together when the Page has Instagram linked
+# — Growth unlocks the Page-connection flow but only activates the Messenger half; Pro
+# additionally activates Instagram when present. See page_signup_callback's own docstring for
+# the mechanics.
+CHANNELS_INCLUDED: dict[PlanTier, list[str]] = {
+    PlanTier.starter: ["whatsapp"],
+    PlanTier.growth: ["whatsapp", "messenger"],
+    PlanTier.pro: ["whatsapp", "messenger", "instagram"],
+}

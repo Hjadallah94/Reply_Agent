@@ -11,11 +11,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from reply_agent.api.app import app
-from reply_agent.db.models import Business, KnowledgeDocType, KnowledgeDocument, ProductImage
+from reply_agent.billing.tiers import CATALOG_LIMIT
+from reply_agent.db.models import (
+    Business,
+    KnowledgeDocType,
+    KnowledgeDocument,
+    PlanTier,
+    ProductImage,
+)
 from reply_agent.db.session import get_sessionmaker
 from tests.auth_helpers import create_logged_in_business, dispose_engines
 
 BUSINESS_NAME = "Catalog Test Business"
+PRO_BUSINESS_NAME = "Catalog Test Business (Pro)"
 EMBED_PATCH = "reply_agent.knowledge.catalog.embed_documents"
 
 
@@ -27,6 +35,16 @@ def client():
 @pytest.fixture
 async def business(client):
     b = await create_logged_in_business(client, BUSINESS_NAME)
+    yield b
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        await session.execute(delete(Business).where(Business.id == b.id))
+        await session.commit()
+
+
+@pytest.fixture
+async def pro_business(client):
+    b = await create_logged_in_business(client, PRO_BUSINESS_NAME, plan_tier=PlanTier.pro)
     yield b
     await dispose_engines()
     async with get_sessionmaker()() as session:
@@ -75,6 +93,50 @@ async def test_create_product_rejects_bad_price(client, business):
         data={"name": "Bad", "price_jod": "not-a-number"},
     )
     assert response.status_code == 400
+
+
+async def test_create_product_rejects_once_at_the_tier_catalog_limit(client, business):
+    """Doc 3 roadmap (real tier differentiation, 2026-09-07) — business fixture defaults to
+    Starter (CATALOG_LIMIT 20). Not retroactive by design: this only tests that a NEW create is
+    blocked at the cap, never that existing products get removed.
+
+    dispose_engines() after every call: outside a `with TestClient(...) as client:` block, each
+    client.post() spins up its own fresh event loop (starlette's TestClient._portal_factory), so
+    a rapid-fire loop like this one will eventually have the SQLAlchemy pool hand a later call a
+    connection still bound to an earlier call's now-dead loop — the same cross-loop failure this
+    session has hit before, just needing more iterations to surface than a one-or-two-call test.
+    """
+    limit = CATALOG_LIMIT[PlanTier.starter]
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        for i in range(limit):
+            response = client.post(
+                f"/businesses/{business.id}/dashboard/catalog/products/new",
+                data={"name": f"Product {i}", "price_jod": "1"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            await dispose_engines()
+
+        over_limit_response = client.post(
+            f"/businesses/{business.id}/dashboard/catalog/products/new",
+            data={"name": "One Too Many", "price_jod": "1"},
+        )
+    assert over_limit_response.status_code == 400
+    assert "upgrade" in over_limit_response.text.lower()
+
+
+async def test_pro_tier_has_no_catalog_limit(client, pro_business):
+    limit = CATALOG_LIMIT[PlanTier.starter]
+    with patch(EMBED_PATCH, return_value=[[0.0] * 1024]):
+        # Create one more product than Starter's own limit — Pro must never reject.
+        for i in range(limit + 1):
+            response = client.post(
+                f"/businesses/{pro_business.id}/dashboard/catalog/products/new",
+                data={"name": f"Pro Product {i}", "price_jod": "1"},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            await dispose_engines()
 
 
 async def test_edit_product(client, business):

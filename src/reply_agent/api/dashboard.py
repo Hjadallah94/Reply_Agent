@@ -26,7 +26,7 @@ from reply_agent.auth.dependencies import (
     get_current_user,
     require_business_access,
 )
-from reply_agent.billing.tiers import MESSAGE_CAPS, TIER_PRICE_JOD
+from reply_agent.billing.tiers import CATALOG_LIMIT, MESSAGE_CAPS, TIER_PRICE_JOD
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.config import get_settings
 from reply_agent.db.models import (
@@ -1120,6 +1120,28 @@ async def create_product_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async with tenant_session(business.id) as session:
+        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — not retroactive: an existing
+        # business already over a newly-introduced cap keeps its existing products, only a new
+        # create is blocked. None means unlimited (Pro), never reached here.
+        catalog_limit = CATALOG_LIMIT[business.plan_tier]
+        if catalog_limit is not None:
+            product_count = await session.scalar(
+                select(func.count())
+                .select_from(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.business_id == business.id,
+                    KnowledgeDocument.type == KnowledgeDocType.product,
+                )
+            )
+            if product_count >= catalog_limit:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Your {business.plan_tier.value} plan is limited to {catalog_limit} "
+                        "products — upgrade to add more."
+                    ),
+                )
+
         document = await create_product(session, business.id, product)
         # Flush so the document row actually exists before ProductImage's FK references it —
         # document.id itself is already populated client-side (the pk's uuid4 default), but

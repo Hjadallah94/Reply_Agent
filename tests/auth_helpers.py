@@ -22,12 +22,14 @@ async def dispose_engines() -> None:
     await get_app_engine().dispose()
 
 
-async def create_logged_in_business(client, name: str) -> Business:
+async def create_logged_in_business(
+    client, name: str, *, plan_tier: PlanTier = PlanTier.starter
+) -> Business:
     """Creates a Business + User in the DB and logs the given TestClient in as that user (the
     session cookie persists on the client for subsequent requests), returning the Business row.
     """
     async with get_sessionmaker()() as session:
-        business = Business(name=name, plan_tier=PlanTier.starter)
+        business = Business(name=name, plan_tier=plan_tier)
         session.add(business)
         await session.flush()
 
