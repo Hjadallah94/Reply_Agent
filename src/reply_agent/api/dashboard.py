@@ -1068,11 +1068,22 @@ async def catalog_list(request: Request, business: Business = Depends(require_bu
     )
 
 
-async def _save_product_image(session, document_id: uuid.UUID, image: UploadFile) -> None:
+async def _save_product_image(
+    session, document_id: uuid.UUID, image: UploadFile, plan_tier: PlanTier
+) -> None:
     """Doc 3 roadmap ("agent can send photo samples") — upserts (one image per product,
     ProductImage.document_id is unique). Caller's tenant_session owns the transaction, same
     convention as knowledge/catalog.py's create_product/update_product.
+
+    Doc 3 roadmap (real tier differentiation, 2026-09-07) — product photos are Pro-only. Checked
+    here, in the one place both create_product_route and update_product_route funnel through,
+    rather than at each call site, so a future third caller can't forget it.
     """
+    if plan_tier != PlanTier.pro:
+        raise HTTPException(
+            status_code=400,
+            detail="Product photos are a Pro feature — upgrade to Pro to add one.",
+        )
     image_data = await image.read()
     existing = await session.scalar(
         select(ProductImage).where(ProductImage.document_id == document_id)
@@ -1099,6 +1110,8 @@ async def new_product_form(request: Request, business: Business = Depends(requir
         document=None,
         product=None,
         variants_text="",
+        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — product photos are Pro-only.
+        photos_included=business.plan_tier == PlanTier.pro,
     )
 
 
@@ -1152,7 +1165,7 @@ async def create_product_route(
         # the row isn't in the database yet without this.
         await session.flush()
         if image is not None and image.filename:
-            await _save_product_image(session, document.id, image)
+            await _save_product_image(session, document.id, image, business.plan_tier)
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
 
@@ -1184,6 +1197,8 @@ async def edit_product_form(
         product=document.structured_data,
         variants_text=variants_text,
         has_image=has_image,
+        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — product photos are Pro-only.
+        photos_included=business.plan_tier == PlanTier.pro,
     )
 
 
@@ -1217,7 +1232,7 @@ async def update_product_route(
         # Leaves the existing photo untouched when the owner doesn't pick a new one — this is
         # an edit form, not a "replace everything" one.
         if image is not None and image.filename:
-            await _save_product_image(session, document_id, image)
+            await _save_product_image(session, document_id, image, business.plan_tier)
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard/catalog", status_code=303)
 

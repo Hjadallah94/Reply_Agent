@@ -14,8 +14,12 @@
   </div>
   <div class="field">
     <label for="image">{{ t('product_form.image_label') }}</label>
-    <input type="file" id="image" name="image" accept="image/*">
+    <input type="file" id="image" name="image" accept="image/*" {% if not photos_included %}disabled{% endif %}>
+    {% if photos_included %}
     <span class="hint">{{ t('product_form.image_hint') }}</span>
+    {% else %}
+    <span class="hint">{{ t('product_form.image_pro_only') }}</span>
+    {% endif %}
   </div>
   <div class="field">
     <label for="description">{{ t('product_form.description_label') }}</label>

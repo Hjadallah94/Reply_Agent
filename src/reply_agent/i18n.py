@@ -164,6 +164,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Optional. Shown to customers when the agent mentions this product.",
         "ar": "اختياري. تُعرض للعملاء عندما يذكر الوكيل هذا المنتج.",
     },
+    # Doc 3 roadmap (real tier differentiation, 2026-09-07) — product photos are a Pro feature.
+    "product_form.image_pro_only": {
+        "en": "Product photos are a Pro feature — upgrade to Pro to add one.",
+        "ar": "صور المنتجات ميزة خاصة بباقة Pro — قم بالترقية إلى Pro لإضافة صورة.",
+    },
     "product_form.description_label": {"en": "Description", "ar": "الوصف"},
     "product_form.price_label": {"en": "Price (JOD)", "ar": "السعر (دينار)"},
     "product_form.stock_status_label": {"en": "Stock status", "ar": "حالة المخزون"},
