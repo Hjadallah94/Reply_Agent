@@ -43,6 +43,23 @@ async def _user_for(business_name: str) -> User:
     return user
 
 
+async def test_signup_page_has_a_persistent_privacy_policy_link(client):
+    """Meta App Review, 2026-09-07 — the checkbox link at signup was previously the only place
+    the privacy policy was reachable from inside the app at all; base.html's footer (rendered
+    on every page, not just signup) is meant to make it reachable everywhere.
+    """
+    response = client.get("/signup")
+    assert response.status_code == 200
+    assert 'href="https://hjadallah94.github.io/Reply_Agent/privacy-policy.html"' in response.text
+    assert 'href="https://hjadallah94.github.io/Reply_Agent/terms-of-service.html"' in response.text
+
+
+async def test_login_page_has_a_persistent_privacy_policy_link(client):
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert 'href="https://hjadallah94.github.io/Reply_Agent/privacy-policy.html"' in response.text
+
+
 async def test_signup_creates_business_and_logs_in(client):
     response = client.post(
         "/signup",

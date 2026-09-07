@@ -82,6 +82,16 @@
     margin: 0 auto;
     padding: 28px 24px 64px;
   }
+  /* Doc 3 roadmap (Meta App Review, 2026-09-07) — a persistent link on every page, not just
+     the one-time signup checkbox, so the privacy policy/terms stay reachable to a returning
+     user (and to a reviewer checking any page, not only signup). */
+  footer.legal {
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    text-align: center;
+  }
+  footer.legal a { color: var(--text-muted); font-size: 13px; text-decoration: none; margin: 0 10px; }
+  footer.legal a:hover { text-decoration: underline; }
   h1 { font-size: 1.4rem; margin: 0 0 18px; }
   h2 { font-size: 1.05rem; margin: 28px 0 10px; }
   .card {
@@ -330,6 +340,10 @@
 <main>
 {% block content %}{% endblock %}
 </main>
+<footer class="legal">
+  <a href="https://hjadallah94.github.io/Reply_Agent/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>
+  <a href="https://hjadallah94.github.io/Reply_Agent/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a>
+</footer>
 {% if business and vapid_public_key %}
 <script>
 (function () {
