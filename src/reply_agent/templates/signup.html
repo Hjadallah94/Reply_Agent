@@ -1,9 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Sign up — Reply Agent{% endblock %}
 {% block content %}
+{% if tiers %}
+<h1>Choose your plan</h1>
+<p class="muted" style="margin: 0 0 18px;">Pick a plan to get started — you can change it later.</p>
+<div class="plan-grid">
+  {% for row in tiers %}
+  <div class="card plan-card">
+    <h2 style="margin: 0 0 2px;">{{ row.label }}</h2>
+    <p class="muted" style="margin: 0 0 14px;"><strong style="font-size: 20px; color: var(--text);">{{ row.price_jod }}</strong> JOD/mo</p>
+    <ul style="margin: 0 0 18px; padding-left: 18px; font-size: 13.5px;">
+      <li>{{ row.message_cap }} messages/mo</li>
+      <li>{% if row.catalog_limit %}{{ row.catalog_limit }} products{% else %}Unlimited products{% endif %}</li>
+      <li>Channels: {{ row.channels | map('capitalize') | join(', ') }}</li>
+      {% if row.photos_included %}<li>Product photos</li>{% endif %}
+    </ul>
+    <a class="export-link" href="/signup?tier={{ row.value }}" style="display: block; text-align: center;">Get started</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
 <form class="auth-form" method="post" action="/signup">
   <h1>Create your account</h1>
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="row">
+      <span>You're signing up for: <strong>{{ tier.label }}</strong> — {{ tier.price_jod }} JOD/mo</span>
+      <a class="export-link" href="/signup">Change plan</a>
+    </div>
+  </div>
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="tier" value="{{ tier.value }}">
   <label>Business name<input type="text" name="business_name" required autofocus></label>
   <label>Email<input type="email" name="email" required></label>
   <label>Password<input type="password" name="password" minlength="8" required></label>
@@ -27,4 +53,5 @@
   <button type="submit">Create account</button>
   <p class="switch">Already have an account? <a href="/login">Log in</a></p>
 </form>
+{% endif %}
 {% endblock %}

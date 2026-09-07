@@ -26,7 +26,7 @@ from reply_agent.auth.dependencies import (
     get_current_user,
     require_business_access,
 )
-from reply_agent.billing.tiers import CATALOG_LIMIT, CHANNELS_INCLUDED, MESSAGE_CAPS, TIER_PRICE_JOD
+from reply_agent.billing.tiers import CATALOG_LIMIT, CHANNELS_INCLUDED, tier_comparison_rows
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.config import get_settings
 from reply_agent.db.models import (
@@ -374,22 +374,12 @@ async def billing_page(request: Request, business: Business = Depends(require_bu
     async with tenant_session(business.id) as session:
         subscription = await get_or_create_subscription(session, business)
 
-    tiers = [
-        {
-            "value": tier.value,
-            "label": tier.value.capitalize(),
-            "price_jod": TIER_PRICE_JOD[tier],
-            "message_cap": MESSAGE_CAPS[tier],
-        }
-        for tier in PlanTier
-    ]
-
     return await _render(
         request,
         "billing.html",
         business=business,
         subscription=subscription,
-        tiers=tiers,
+        tiers=tier_comparison_rows(),
         payment_instructions=get_settings().payment_instructions,
     )
 

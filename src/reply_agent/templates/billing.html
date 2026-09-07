@@ -41,6 +41,13 @@
       </span>
       <span class="muted">{{ tier.message_cap }} {{ t('billing.messages_per_month') }}</span>
     </div>
+    <ul class="muted" style="margin: 8px 0 0 22px; font-size: 12.5px; padding: 0;">
+      <li>
+        {% if tier.catalog_limit %}{{ tier.catalog_limit }} {{ t('billing.products_label') }}{% else %}{{ t('billing.unlimited_products') }}{% endif %}
+      </li>
+      <li>{{ t('billing.channels_label') }}: {{ tier.channels | map('capitalize') | join(', ') }}</li>
+      {% if tier.photos_included %}<li>{{ t('billing.photos_included') }}</li>{% endif %}
+    </ul>
   </label>
   {% endfor %}
   <button type="submit">{{ t('billing.request_plan_button') }}</button>

@@ -49,3 +49,25 @@ CHANNELS_INCLUDED: dict[PlanTier, list[str]] = {
     PlanTier.growth: ["whatsapp", "messenger"],
     PlanTier.pro: ["whatsapp", "messenger", "instagram"],
 }
+
+
+def tier_comparison_rows() -> list[dict]:
+    """One row per PlanTier, every real feature difference in one place — signup.html's plan-
+    first comparison and billing.html's change-plan page both render from this, so the two can
+    never show a different story about what a tier actually gets you. Product photos are the one
+    feature gate that isn't its own dict (billing/tiers.py's CATALOG_LIMIT/CHANNELS_INCLUDED are;
+    api/dashboard.py's _save_product_image checks PlanTier.pro directly) — expressed the same way
+    here for display purposes only.
+    """
+    return [
+        {
+            "value": tier.value,
+            "label": tier.value.capitalize(),
+            "price_jod": TIER_PRICE_JOD[tier],
+            "message_cap": MESSAGE_CAPS[tier],
+            "catalog_limit": CATALOG_LIMIT[tier],
+            "channels": CHANNELS_INCLUDED[tier],
+            "photos_included": tier == PlanTier.pro,
+        }
+        for tier in PlanTier
+    ]

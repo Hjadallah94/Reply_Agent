@@ -312,6 +312,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "billing.jod_per_month": {"en": "JOD/mo", "ar": "دينار/شهر"},
     "billing.messages_per_month": {"en": "messages/mo", "ar": "رسالة/شهر"},
     "billing.request_plan_button": {"en": "Request this plan", "ar": "اطلب هاي الخطة"},
+    # Doc 3 roadmap (real tier differentiation, 2026-09-07) — feature bullets shared by
+    # billing.html's change-plan cards and signup.html's plan-first comparison cards.
+    "billing.products_label": {"en": "products", "ar": "منتج"},
+    "billing.unlimited_products": {"en": "Unlimited products", "ar": "منتجات غير محدودة"},
+    "billing.channels_label": {"en": "Channels", "ar": "القنوات"},
+    "billing.photos_included": {"en": "Product photos", "ar": "صور المنتجات"},
     "status.payment_pending": {"en": "Payment pending", "ar": "بانتظار الدفع"},
     "status.trialing": {"en": "Trial", "ar": "تجريبي"},
     # --- status/badge values (real enums + conventional stock_status values) ---

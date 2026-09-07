@@ -60,6 +60,30 @@ async def test_login_page_has_a_persistent_privacy_policy_link(client):
     assert 'href="https://hjadallah94.github.io/Reply_Agent/privacy-policy.html"' in response.text
 
 
+async def test_signup_page_bare_shows_the_tier_comparison(client):
+    """Doc 3 roadmap (real tier differentiation, 2026-09-07) — plan-first signup."""
+    response = client.get("/signup")
+    assert response.status_code == 200
+    assert "Choose your plan" in response.text
+    assert "Starter" in response.text
+    assert "Growth" in response.text
+    assert "Pro" in response.text
+    assert "/signup?tier=growth" in response.text
+
+
+async def test_signup_page_with_valid_tier_shows_the_account_form(client):
+    response = client.get("/signup", params={"tier": "growth"})
+    assert response.status_code == 200
+    assert "You're signing up for" in response.text
+    assert "Growth" in response.text
+    assert 'name="business_name"' in response.text
+
+
+async def test_signup_page_404s_for_an_unknown_tier(client):
+    response = client.get("/signup", params={"tier": "enterprise"})
+    assert response.status_code == 404
+
+
 async def test_signup_creates_business_and_logs_in(client):
     response = client.post(
         "/signup",
@@ -67,6 +91,7 @@ async def test_signup_creates_business_and_logs_in(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "tier": "growth",
             "whatsapp_number": "962 79 000 0000",
             "accept_terms": "true",
         },
@@ -85,9 +110,29 @@ async def test_signup_creates_business_and_logs_in(client):
         assert user is not None
         assert user.business.name == BUSINESS_NAME
         assert user.accepted_terms_at is not None
+        assert user.business.plan_tier.value == "growth"
         # Doc 3 roadmap (public subscribe page) — manual entry only, never wired into
         # channels_connected (see db/models.py's docstring on the new column).
         assert user.business.requested_whatsapp_number == "962 79 000 0000"
+
+
+async def test_signup_rejects_an_unknown_tier(client):
+    response = client.post(
+        "/signup",
+        data={
+            "business_name": BUSINESS_NAME,
+            "email": SIGNUP_EMAIL,
+            "password": "a-strong-password",
+            "tier": "enterprise",
+            "accept_terms": "true",
+        },
+    )
+    assert response.status_code == 400
+
+    await dispose_engines()
+    async with get_sessionmaker()() as session:
+        user = await session.scalar(select(User).where(User.email == SIGNUP_EMAIL))
+        assert user is None
 
 
 async def test_signup_leaves_whatsapp_number_unset_when_omitted(client):
@@ -97,6 +142,7 @@ async def test_signup_leaves_whatsapp_number_unset_when_omitted(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "tier": "starter",
             "accept_terms": "true",
         },
         follow_redirects=False,
@@ -118,6 +164,7 @@ async def test_signup_rejects_duplicate_email(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "tier": "starter",
             "accept_terms": "true",
         },
         follow_redirects=False,
@@ -130,6 +177,7 @@ async def test_signup_rejects_duplicate_email(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-different-password",
+            "tier": "starter",
             "accept_terms": "true",
         },
     )
@@ -144,6 +192,7 @@ async def test_signup_rejects_short_password(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "short",
+            "tier": "starter",
             "accept_terms": "true",
         },
     )
@@ -158,6 +207,7 @@ async def test_signup_rejects_missing_accept_terms(client):
             "business_name": BUSINESS_NAME,
             "email": SIGNUP_EMAIL,
             "password": "a-strong-password",
+            "tier": "starter",
         },
     )
     assert response.status_code == 400
