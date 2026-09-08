@@ -2,6 +2,7 @@ from reply_agent.graph.risk_rules import (
     blocking_reason,
     evaluate_capability_gap,
     evaluate_risk_gate,
+    is_risk_category_reason,
     order_context_found,
 )
 
@@ -81,3 +82,22 @@ def test_order_context_found_detects_order_prefixed_sources():
     assert order_context_found([{"source": "order:abc-123", "snippet": "...", "score": 1.0}])
     assert not order_context_found([{"source": "faq-doc-id", "snippet": "...", "score": 0.8}])
     assert not order_context_found([])
+
+
+def test_is_risk_category_reason_true_for_a_risk_category_label():
+    """Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+    2026-09-07) — load_context.py uses this to decide which of a conversation's pending
+    escalations represent a topic the owner explicitly wants to decide the outcome of.
+    """
+    reason = evaluate_risk_gate(make_intent(label="price_negotiation"))
+    assert is_risk_category_reason(reason)
+
+
+def test_is_risk_category_reason_true_for_negative_sentiment():
+    reason = evaluate_risk_gate(make_intent(label="other", confidence=0.8, sentiment="negative"))
+    assert is_risk_category_reason(reason)
+
+
+def test_is_risk_category_reason_false_for_a_capability_gap_reason():
+    reason = evaluate_capability_gap(make_intent(label="place_order"))
+    assert not is_risk_category_reason(reason)

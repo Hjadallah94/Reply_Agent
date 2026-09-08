@@ -114,6 +114,12 @@ class GraphState(TypedDict):
     # Business.escalation_rules (Doc 3 roadmap) — same load_context.py fetch, read by
     # risk_rules.py's evaluate_risk_gate via routers.py's blocks_auto_send (also pure).
     escalation_rules: NotRequired[dict]
+    # Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+    # 2026-09-07) — reasons of this conversation's still-*pending* risk-category escalations
+    # (risk_rules.py's is_risk_category_reason), set by load_context.py. Read by
+    # generate_response.py so it can tell the model not to quietly resolve one of these topics
+    # in a later reply just because it comes up again in conversation_history.
+    open_risk_escalation_reasons: NotRequired[list[str]]
 
     intent: NotRequired[Intent]
     retrieved_context: NotRequired[list[RetrievedChunk]]

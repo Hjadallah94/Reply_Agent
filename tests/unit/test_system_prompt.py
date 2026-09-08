@@ -71,6 +71,35 @@ def test_capability_gap_instruction_absent_when_explicitly_false():
     )
 
 
+def test_open_risk_escalation_instruction_absent_by_default():
+    assert "still waiting on the owner's decision" not in _prompt()
+
+
+def test_open_risk_escalation_instruction_absent_for_empty_list():
+    assert "still waiting on the owner's decision" not in _prompt(open_risk_escalation_reasons=[])
+
+
+def test_open_risk_escalation_instruction_appears_when_provided():
+    """Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+    2026-09-07) — a price-negotiation escalation must not get quietly resolved in a later reply
+    just because the topic resurfaces in conversation history.
+    """
+    prompt = _prompt(open_risk_escalation_reasons=["Risk category: price_negotiation"])
+    assert "still waiting on the owner's decision" in prompt
+    assert "Risk category: price_negotiation" in prompt
+
+
+def test_open_risk_escalation_instruction_lists_multiple_reasons():
+    prompt = _prompt(
+        open_risk_escalation_reasons=[
+            "Risk category: price_negotiation",
+            "Strongly negative customer sentiment",
+        ]
+    )
+    assert "Risk category: price_negotiation" in prompt
+    assert "Strongly negative customer sentiment" in prompt
+
+
 def test_base_prompt_names_arabizi_explicitly():
     # Souvenir-shop demo roadmap — customers sometimes write Arabic in Latin letters/digits
     # (e.g. "3" for ع); this must be named explicitly, not left to the code-switching line alone.

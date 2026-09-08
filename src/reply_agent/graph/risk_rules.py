@@ -24,6 +24,12 @@ RISK_INTENT_LABELS = {
 SENSITIVITY_THRESHOLDS = {"cautious": 0.4, "balanced": 0.6, "permissive": 0.8}
 DEFAULT_SENSITIVITY = "balanced"
 
+# The two reason shapes evaluate_risk_gate below produces — pulled out as constants so
+# is_risk_category_reason (and evaluate_risk_gate itself) share one source of truth for the
+# string shape, instead of a second module having to guess/duplicate it.
+_RISK_CATEGORY_REASON_PREFIX = "Risk category: "
+_NEGATIVE_SENTIMENT_REASON = "Strongly negative customer sentiment"
+
 # Not a risk category — these intents aren't sensitive, the agent just structurally can't
 # answer them yet. An honest "I don't know" hedge is technically true but doesn't actually
 # resolve the customer's need, so it shouldn't count as auto-resolved (Doc 1 Section 5).
@@ -48,9 +54,9 @@ def evaluate_risk_gate(intent: Intent, escalation_rules: dict | None = None) -> 
         rules.get("sensitivity", DEFAULT_SENSITIVITY), SENSITIVITY_THRESHOLDS[DEFAULT_SENSITIVITY]
     )
     if intent["label"] in risk_categories:
-        return f"Risk category: {intent['label']}"
+        return f"{_RISK_CATEGORY_REASON_PREFIX}{intent['label']}"
     if intent["sentiment"] == "negative" and intent["confidence"] >= threshold:
-        return "Strongly negative customer sentiment"
+        return _NEGATIVE_SENTIMENT_REASON
     return None
 
 
@@ -82,6 +88,19 @@ def blocking_reason(
     return evaluate_risk_gate(intent, escalation_rules) or evaluate_capability_gap(
         intent, order_found=order_found, delivery_estimate_found=delivery_estimate_found
     )
+
+
+def is_risk_category_reason(reason: str) -> bool:
+    """True for an Escalation.reason produced by evaluate_risk_gate above, false for one
+    produced by evaluate_capability_gap. Doc 3 roadmap (real gap found live, 12-message Petra
+    Treasures conversation test, 2026-09-07) — graph/nodes/load_context.py uses this to decide
+    which of a conversation's still-pending escalations represent a topic the owner explicitly
+    wants to decide the outcome of, so generate_response.py can tell the model not to quietly
+    resolve it in a later reply. Not surfaced for capability-gap escalations — the model
+    structurally can't resolve those on its own regardless, a different problem already handled
+    by generate_response.py's will_escalate_for_capability_gap.
+    """
+    return reason.startswith(_RISK_CATEGORY_REASON_PREFIX) or reason == _NEGATIVE_SENTIMENT_REASON
 
 
 def order_context_found(retrieved_context: list) -> bool:

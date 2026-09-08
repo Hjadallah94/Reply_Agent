@@ -10,6 +10,7 @@ from reply_agent.db.models import (
     Conversation,
     Customer,
     Escalation,
+    EscalationStatus,
     Message,
     MessageDirection,
     Order,
@@ -17,6 +18,7 @@ from reply_agent.db.models import (
 )
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.estimate_delivery import AMMAN_TZ
+from reply_agent.graph.risk_rules import is_risk_category_reason
 from reply_agent.graph.state import ConversationTurn, GraphState
 
 HISTORY_LIMIT = 10
@@ -92,6 +94,24 @@ async def load_context(state: GraphState) -> dict:
             .where(Escalation.conversation_id == conversation.id)
         )
 
+        # Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+        # 2026-09-07) — this conversation's still-unresolved risk-category escalations (never
+        # includes this run's own potential escalation, which doesn't exist yet at this point in
+        # the pipeline). Read by generate_response.py so it can tell the model not to quietly
+        # resolve one of these topics in a later reply just because it resurfaces in
+        # conversation_history.
+        pending_escalations = (
+            await session.scalars(
+                select(Escalation).where(
+                    Escalation.conversation_id == conversation.id,
+                    Escalation.status == EscalationStatus.pending,
+                )
+            )
+        ).all()
+        open_risk_escalation_reasons = [
+            e.reason for e in pending_escalations if is_risk_category_reason(e.reason)
+        ]
+
     history: list[ConversationTurn] = [
         {
             "role": "customer" if m.direction == MessageDirection.inbound else "agent",
@@ -111,6 +131,7 @@ async def load_context(state: GraphState) -> dict:
         "business_is_away": business.is_away,
         "business_agent_enabled": business.agent_enabled,
         "escalation_rules": business.escalation_rules,
+        "open_risk_escalation_reasons": open_risk_escalation_reasons,
         "pending_order": (
             {
                 "id": str(pending_order.id),

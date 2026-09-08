@@ -58,6 +58,7 @@ def build_system_prompt(
     custom_rules: list[str] | None = None,
     require_order_confirmation: bool = False,
     will_escalate_for_capability_gap: bool = False,
+    open_risk_escalation_reasons: list[str] | None = None,
 ) -> str:
     parts = [BASE_SYSTEM_PROMPT, f"\nYou are replying on behalf of: {business_name}"]
 
@@ -129,6 +130,24 @@ def build_system_prompt(
             "'cancelling your order now' or 'I've updated that') — acknowledge the request and "
             "say the owner will follow up on it directly, without confirming anything you have "
             "no way to actually do."
+        )
+
+    if open_risk_escalation_reasons:
+        # Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+        # 2026-09-07) — a discount request correctly escalated under the price_negotiation risk
+        # category (the owner explicitly wants to decide those, not the agent), but the very
+        # next customer message — a different topic — produced an auto-sent reply that also
+        # addressed the discount inline, resolving it without the owner ever seeing it. The
+        # risk gate only looks at the current message's own classified intent; this tells the
+        # model plainly not to quietly resolve an already-escalated topic just because it
+        # resurfaces in conversation_history.
+        reasons_text = "; ".join(open_risk_escalation_reasons)
+        parts.append(
+            f"\nIMPORTANT — the following topic(s) from earlier in this conversation are still "
+            f"waiting on the owner's decision and have NOT been resolved: {reasons_text}. Do "
+            "NOT answer, resolve, or restate a decision on any of these specific topics "
+            "yourself, even if the customer brings it up again — if it comes up, just say it's "
+            "still waiting on the owner. You can still help with anything else in their message."
         )
 
     parts.append(

@@ -16,10 +16,12 @@ from reply_agent.db.models import (
     ConversationStatus,
     Customer,
     Escalation,
+    EscalationStatus,
     PlanTier,
 )
 from reply_agent.db.session import get_sessionmaker
 from reply_agent.graph.nodes.escalate_to_owner import escalate_to_owner
+from reply_agent.graph.nodes.load_context import load_context
 
 THREAD_ID_TEMPLATE = "whatsapp:{business_id}:962790004444"
 
@@ -188,3 +190,95 @@ async def test_no_push_url_when_app_base_url_not_configured(business, conversati
 
     mock_push.assert_called_once()
     assert mock_push.call_args.kwargs["url"] == ""
+
+
+# --- load_context's open-risk-escalation surfacing -----------------------------------------
+# Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test, 2026-09-07):
+# a price-negotiation escalation must not get quietly resolved by a later, differently-topiced
+# reply just because it resurfaces in conversation_history. load_context.py surfaces this
+# conversation's still-pending risk-category escalation reasons so generate_response.py can tell
+# the model not to.
+
+
+async def _seed_escalation(conversation_id: uuid.UUID, *, reason: str, status: EscalationStatus):
+    async with get_sessionmaker()() as session:
+        escalation = Escalation(conversation_id=conversation_id, reason=reason, status=status)
+        session.add(escalation)
+        await session.commit()
+        await session.refresh(escalation)
+        return escalation
+
+
+def _load_context_state(
+    business_id: uuid.UUID, customer_id: uuid.UUID, thread_id: str, channel_message_id: str
+) -> dict:
+    return {
+        "business_id": str(business_id),
+        "customer_id": str(customer_id),
+        "channel": "whatsapp",
+        "thread_id": thread_id,
+        "message": {
+            "text": "what about something under 10 JOD?",
+            "media_refs": [],
+            "received_at": "2026-09-07T14:02:00Z",
+            "channel_message_id": channel_message_id,
+        },
+    }
+
+
+async def test_load_context_surfaces_a_pending_risk_category_escalation(business, conversation):
+    await _seed_escalation(
+        conversation.id,
+        reason="Risk category: price_negotiation",
+        status=EscalationStatus.pending,
+    )
+
+    result = await load_context(
+        _load_context_state(
+            business.id, conversation.customer_id, conversation.thread_id, "wamid.open-risk-1"
+        )
+    )
+
+    assert result["open_risk_escalation_reasons"] == ["Risk category: price_negotiation"]
+
+
+async def test_load_context_excludes_a_resolved_escalation(business, conversation):
+    await _seed_escalation(
+        conversation.id,
+        reason="Risk category: price_negotiation",
+        status=EscalationStatus.resolved,
+    )
+
+    result = await load_context(
+        _load_context_state(
+            business.id, conversation.customer_id, conversation.thread_id, "wamid.open-risk-2"
+        )
+    )
+
+    assert result["open_risk_escalation_reasons"] == []
+
+
+async def test_load_context_excludes_a_pending_capability_gap_escalation(business, conversation):
+    await _seed_escalation(
+        conversation.id,
+        reason="No place order capability yet — needs a human answer",
+        status=EscalationStatus.pending,
+    )
+
+    result = await load_context(
+        _load_context_state(
+            business.id, conversation.customer_id, conversation.thread_id, "wamid.open-risk-3"
+        )
+    )
+
+    assert result["open_risk_escalation_reasons"] == []
+
+
+async def test_load_context_with_no_pending_escalations_returns_empty_list(business, conversation):
+    result = await load_context(
+        _load_context_state(
+            business.id, conversation.customer_id, conversation.thread_id, "wamid.open-risk-4"
+        )
+    )
+
+    assert result["open_risk_escalation_reasons"] == []

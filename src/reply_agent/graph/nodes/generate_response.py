@@ -90,6 +90,7 @@ async def generate_response(state: GraphState) -> dict:
         custom_rules=[rule.rule_text for rule in approved_rules],
         require_order_confirmation=require_order_confirmation,
         will_escalate_for_capability_gap=will_escalate_for_capability_gap,
+        open_risk_escalation_reasons=state.get("open_risk_escalation_reasons", []),
     )
 
     history = state["conversation_history"][-6:]
