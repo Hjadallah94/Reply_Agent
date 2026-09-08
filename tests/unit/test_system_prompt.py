@@ -51,6 +51,26 @@ def test_order_confirmation_instruction_absent_when_explicitly_false():
     assert "before this order is treated as placed" not in _prompt(require_order_confirmation=False)
 
 
+def test_capability_gap_instruction_absent_by_default():
+    assert "you cannot actually perform this request" not in _prompt()
+
+
+def test_capability_gap_instruction_appears_when_flagged():
+    """Doc 3 roadmap (real gap found live, 12-message Petra Treasures conversation test,
+    2026-09-07) — a capability-gap draft (e.g. "cancel my order") must not claim the action
+    already happened, since this draft is only ever shown to the owner, never auto-sent.
+    """
+    prompt = _prompt(will_escalate_for_capability_gap=True)
+    assert "you cannot actually perform this request" in prompt
+    assert "never say 'cancelling your order now'" in prompt
+
+
+def test_capability_gap_instruction_absent_when_explicitly_false():
+    assert "you cannot actually perform this request" not in _prompt(
+        will_escalate_for_capability_gap=False
+    )
+
+
 def test_base_prompt_names_arabizi_explicitly():
     # Souvenir-shop demo roadmap — customers sometimes write Arabic in Latin letters/digits
     # (e.g. "3" for ع); this must be named explicitly, not left to the code-switching line alone.

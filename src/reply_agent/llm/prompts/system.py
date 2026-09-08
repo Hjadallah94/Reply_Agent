@@ -57,6 +57,7 @@ def build_system_prompt(
     delivery_estimate: dict | None = None,
     custom_rules: list[str] | None = None,
     require_order_confirmation: bool = False,
+    will_escalate_for_capability_gap: bool = False,
 ) -> str:
     parts = [BASE_SYSTEM_PROMPT, f"\nYou are replying on behalf of: {business_name}"]
 
@@ -110,6 +111,24 @@ def build_system_prompt(
             "delivery window above) and explicitly ask the customer to confirm it's correct or "
             "tell you what to fix. Do NOT say the order is placed or confirmed yet — that only "
             "happens once the customer confirms in a follow-up message."
+        )
+
+    if will_escalate_for_capability_gap:
+        # Found live, 12-message Petra Treasures conversation test (2026-09-07): a draft for an
+        # order-cancellation request the pipeline structurally can't act on (risk_rules.py's
+        # NO_CAPABILITY_LABELS) opened with "No problem! Cancelling the scarf + other order..." —
+        # confident, present-tense language for an action that never actually happens. This
+        # draft is only ever shown to the owner to review and send themselves (never auto-sent —
+        # that's the definition of a capability-gap escalation), so it must read that way, not
+        # as a completed or promised action.
+        parts.append(
+            "\nIMPORTANT — you cannot actually perform this request; there is no system "
+            "capability for it yet. This draft will be shown to the business owner to review "
+            "and send themselves, not sent to the customer automatically. Do NOT write as if "
+            "the action has already happened or will definitely happen (e.g. never say "
+            "'cancelling your order now' or 'I've updated that') — acknowledge the request and "
+            "say the owner will follow up on it directly, without confirming anything you have "
+            "no way to actually do."
         )
 
     parts.append(

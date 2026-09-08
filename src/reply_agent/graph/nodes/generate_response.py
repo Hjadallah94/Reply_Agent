@@ -11,6 +11,7 @@ from reply_agent.db.models import (
     KnowledgeDocument,
 )
 from reply_agent.db.tenant_session import tenant_session
+from reply_agent.graph.risk_rules import evaluate_capability_gap, order_context_found
 from reply_agent.graph.state import GraphState
 from reply_agent.llm.client import get_anthropic_client
 from reply_agent.llm.prompts.system import build_system_prompt
@@ -64,6 +65,22 @@ async def generate_response(state: GraphState) -> dict:
         and state.get("delivery_estimate") is not None
     )
 
+    # Found live, 12-message Petra Treasures conversation test (2026-09-07): a capability-gap
+    # draft (e.g. "cancel my order" — no such capability, risk_rules.py's NO_CAPABILITY_LABELS)
+    # read as if the action had already happened, even though this draft is only ever shown to
+    # the owner, never auto-sent. Computed the same way confidence_router will independently
+    # re-derive it after self_check, using state already populated by this point in the
+    # pipeline (classify_intent/estimate_delivery/retrieve_knowledge all run before this node).
+    intent_state = state.get("intent")
+    will_escalate_for_capability_gap = intent_state is not None and (
+        evaluate_capability_gap(
+            intent_state,
+            order_found=order_context_found(retrieved_context),
+            delivery_estimate_found=state.get("delivery_estimate") is not None,
+        )
+        is not None
+    )
+
     system_prompt = build_system_prompt(
         business_name=business.name if business else "this seller",
         brand_voice_examples=[doc.content for doc in brand_voice_docs],
@@ -72,6 +89,7 @@ async def generate_response(state: GraphState) -> dict:
         delivery_estimate=state.get("delivery_estimate"),
         custom_rules=[rule.rule_text for rule in approved_rules],
         require_order_confirmation=require_order_confirmation,
+        will_escalate_for_capability_gap=will_escalate_for_capability_gap,
     )
 
     history = state["conversation_history"][-6:]
