@@ -18,6 +18,15 @@
     <a class="export-link" href="/signup?tier={{ row.value }}" style="display: block; text-align: center;">Get started</a>
   </div>
   {% endfor %}
+  <div class="card plan-card">
+    <h2 style="margin: 0 0 2px;">Custom</h2>
+    <p class="muted" style="margin: 0 0 14px;"><strong style="font-size: 20px; color: var(--text);">Let's talk</strong></p>
+    <ul style="margin: 0 0 18px; padding-left: 18px; font-size: 13.5px;">
+      <li>Built around your own message volume, catalog size, and channels</li>
+      <li>For sellers who've outgrown Pro, or need something none of the plans above cover</li>
+    </ul>
+    <a class="export-link" href="mailto:Hasan.jadallah@optignosis.com?subject=Reply%20Agent%20%E2%80%94%20Custom%20plan" style="display: block; text-align: center;">Contact us</a>
+  </div>
 </div>
 {% else %}
 <form class="auth-form" method="post" action="/signup">

@@ -71,6 +71,16 @@ async def test_signup_page_bare_shows_the_tier_comparison(client):
     assert "/signup?tier=growth" in response.text
 
 
+async def test_signup_page_bare_shows_a_custom_contact_card(client):
+    """2026-09-09 — a 4th, non-PlanTier card: sellers with custom requirements contact us
+    directly rather than self-serve signing up on a fixed tier.
+    """
+    response = client.get("/signup")
+    assert response.status_code == 200
+    assert "Custom" in response.text
+    assert "mailto:Hasan.jadallah@optignosis.com" in response.text
+
+
 async def test_signup_page_with_valid_tier_shows_the_account_form(client):
     response = client.get("/signup", params={"tier": "growth"})
     assert response.status_code == 200
