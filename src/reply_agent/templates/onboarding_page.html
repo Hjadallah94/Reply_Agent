@@ -9,9 +9,17 @@ Page — connecting more than one Page per business isn't supported yet.</p>
 
 {% if not config_id %}
 <div class="reason">Not configured yet — META_PAGE_SIGNUP_CONFIG_ID is missing on the server.</div>
+{% elif remaining <= 0 %}
+<div class="reason">You've used all your plan's channels — upgrade to connect more.</div>
+{% elif remaining == 1 %}
+<div class="field">
+  <label>You have 1 channel slot left. If this Page has both Messenger and Instagram available, which would you like?</label>
+  <label style="font-weight: normal;"><input type="radio" name="preferred_channel" value="messenger" checked> Messenger</label>
+  <label style="font-weight: normal;"><input type="radio" name="preferred_channel" value="instagram"> Instagram</label>
+</div>
 {% endif %}
 
-<button id="connect-btn" {% if not config_id %}disabled{% endif %}>Connect Facebook Page</button>
+<button id="connect-btn" {% if not config_id or remaining <= 0 %}disabled{% endif %}>Connect Facebook Page</button>
 <p id="status" class="muted"></p>
 
 <div id="fb-root"></div>
@@ -39,12 +47,14 @@ Page — connecting more than one Page per business isn't supported yet.</p>
           return;
         }
         statusEl.textContent = "Finishing setup...";
+        const preferredChannelInput = document.querySelector('input[name="preferred_channel"]:checked');
         fetch("/onboarding/page/callback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             business_id: businessId,
             code: response.authResponse.code,
+            preferred_channel: preferredChannelInput ? preferredChannelInput.value : null,
           }),
         })
           .then((r) => r.json().then((body) => ({ ok: r.ok, body })))

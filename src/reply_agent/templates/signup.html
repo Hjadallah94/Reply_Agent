@@ -12,7 +12,7 @@
     <ul style="margin: 0 0 18px; padding-left: 18px; font-size: 13.5px;">
       <li>{{ row.message_cap }} messages/mo</li>
       <li>{% if row.catalog_limit %}{{ row.catalog_limit }} products{% else %}Unlimited products{% endif %}</li>
-      <li>Channels: {{ row.channels | map('capitalize') | join(', ') }}</li>
+      <li>{{ row.channel_limit }} channel{{ 's' if row.channel_limit != 1 }} of your choice — WhatsApp, Instagram, or Messenger</li>
       {% if row.photos_included %}<li>Product photos</li>{% endif %}
     </ul>
     <a class="export-link" href="/signup?tier={{ row.value }}" style="display: block; text-align: center;">Get started</a>

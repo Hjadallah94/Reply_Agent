@@ -45,7 +45,7 @@
       <li>
         {% if tier.catalog_limit %}{{ tier.catalog_limit }} {{ t('billing.products_label') }}{% else %}{{ t('billing.unlimited_products') }}{% endif %}
       </li>
-      <li>{{ t('billing.channels_label') }}: {{ tier.channels | map('capitalize') | join(', ') }}</li>
+      <li>{{ tier.channel_limit }} {{ t('billing.channels_label') }}</li>
       {% if tier.photos_included %}<li>{{ t('billing.photos_included') }}</li>{% endif %}
     </ul>
   </label>

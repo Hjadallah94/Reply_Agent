@@ -6,23 +6,27 @@
 <div class="toolbar">
   {% if business.channels_connected.whatsapp %}
     <span class="badge resolved">{{ t('dashboard.whatsapp_connected') }}</span>
-  {% else %}
+  {% elif channels_used < channel_limit %}
     <a class="export-link" href="/onboarding/whatsapp?business_id={{ business.id }}">{{ t('dashboard.connect_whatsapp') }}</a>
-    {% if business.requested_whatsapp_number %}
-      <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.whatsapp_number_on_file') }}: {{ business.requested_whatsapp_number }}</span>
-    {% endif %}
+  {% else %}
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.channel_upsell') }}</span>
+  {% endif %}
+  {% if not business.channels_connected.whatsapp and business.requested_whatsapp_number %}
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.whatsapp_number_on_file') }}: {{ business.requested_whatsapp_number }}</span>
   {% endif %}
   {% if business.channels_connected.messenger %}
     <span class="badge resolved">{{ t('dashboard.messenger_connected') }}</span>
-  {% elif 'messenger' in channels_included %}
+  {% elif channels_used < channel_limit %}
     <a class="export-link" href="/onboarding/page?business_id={{ business.id }}">{{ t('dashboard.connect_messenger') }}</a>
   {% else %}
-    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.messenger_upsell') }}</span>
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.channel_upsell') }}</span>
   {% endif %}
   {% if business.channels_connected.instagram %}
     <span class="badge resolved">{{ t('dashboard.instagram_connected') }}</span>
-  {% elif 'messenger' in channels_included and 'instagram' not in channels_included %}
-    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.instagram_upsell') }}</span>
+  {% elif channels_used < channel_limit %}
+    <a class="export-link" href="/onboarding/page?business_id={{ business.id }}">{{ t('dashboard.connect_instagram') }}</a>
+  {% else %}
+    <span class="muted" style="font-size: 12.5px;">{{ t('dashboard.channel_upsell') }}</span>
   {% endif %}
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/catalog">{{ t('dashboard.manage_catalog') }}</a>
   <a class="export-link" href="/businesses/{{ business.id }}/dashboard/rules">{{ t('dashboard.manage_rules') }}</a>

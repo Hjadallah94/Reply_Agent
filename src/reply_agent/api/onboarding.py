@@ -11,13 +11,14 @@ query param FastAPI's dependency injection can see.
 
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from reply_agent.auth.dependencies import ensure_business_access, require_business_access
-from reply_agent.billing.tiers import CHANNELS_INCLUDED
+from reply_agent.billing.tiers import CHANNEL_LIMIT
 from reply_agent.config import get_settings
 from reply_agent.db.models import Business
 from reply_agent.db.tenant_session import tenant_session
@@ -37,6 +38,14 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
+def _remaining_channel_slots(business: Business) -> int:
+    """Doc 3 roadmap (channel choice by tier, 2026-09-09) — how many more channels this business
+    can connect, of any kind: a tier grants a *count* of channels, not specific ones, so this is
+    purely CHANNEL_LIMIT minus however many are already in Business.channels_connected.
+    """
+    return CHANNEL_LIMIT[business.plan_tier] - len(business.channels_connected)
+
+
 @router.get("/whatsapp")
 async def whatsapp_signup_page(
     request: Request, business: Business = Depends(require_business_access)
@@ -50,6 +59,7 @@ async def whatsapp_signup_page(
             "meta_app_id": settings.meta_app_id,
             "config_id": settings.meta_embedded_signup_config_id,
             "graph_api_version": settings.meta_graph_api_version,
+            "remaining": _remaining_channel_slots(business),
         },
     )
 
@@ -67,6 +77,22 @@ async def whatsapp_signup_callback(request: Request, payload: EmbeddedSignupPayl
 
     async with tenant_session(payload.business_id) as session:
         business = await session.get(Business, payload.business_id)
+
+        # Doc 3 roadmap (channel choice by tier, 2026-09-09) — WhatsApp now competes for the same
+        # per-tier channel-count slots as Instagram/Messenger, rather than being free on every
+        # tier. Reconnecting an already-connected WhatsApp number never needs a new slot.
+        if (
+            "whatsapp" not in business.channels_connected
+            and _remaining_channel_slots(business) <= 0
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Your {business.plan_tier.value} plan is limited to "
+                    f"{CHANNEL_LIMIT[business.plan_tier]} channel(s), and you've already used "
+                    "them all — upgrade to connect more."
+                ),
+            )
 
         try:
             token = await exchange_code_for_token(payload.code)
@@ -101,6 +127,7 @@ async def page_signup_page(request: Request, business: Business = Depends(requir
             "meta_app_id": settings.meta_app_id,
             "config_id": settings.meta_page_signup_config_id,
             "graph_api_version": settings.meta_graph_api_version,
+            "remaining": _remaining_channel_slots(business),
         },
     )
 
@@ -108,6 +135,12 @@ async def page_signup_page(request: Request, business: Business = Depends(requir
 class PageSignupPayload(BaseModel):
     business_id: uuid.UUID
     code: str
+    # Doc 3 roadmap (channel choice by tier, 2026-09-09) — a Page connection can offer Messenger
+    # and, if linked, Instagram together; when only one channel slot remains for both, the
+    # business picks which one they want (onboarding_page.html's radio choice) rather than the
+    # app silently choosing for them. Meaningless (ignored) when 2+ slots remain or the Page only
+    # offers one of the two.
+    preferred_channel: Literal["messenger", "instagram"] | None = None
 
 
 @router.post("/page/callback")
@@ -117,16 +150,20 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
     async with tenant_session(payload.business_id) as session:
         business = await session.get(Business, payload.business_id)
 
-        # Doc 3 roadmap (real tier differentiation, 2026-09-07) — Messenger/Instagram are a
-        # Growth+ feature (billing/tiers.py's CHANNELS_INCLUDED). Checked before spending a Meta
-        # API round trip on a plan that can't use the result; templates/dashboard.html's toolbar
-        # is the primary signal a Starter owner sees, this is the backend's safety net.
-        if "messenger" not in CHANNELS_INCLUDED[business.plan_tier]:
+        already_connected = set(business.channels_connected)
+        remaining = CHANNEL_LIMIT[business.plan_tier] - len(already_connected)
+        # Doc 3 roadmap (channel choice by tier, 2026-09-09) — checked before spending a Meta API
+        # round trip on a plan with no slots left; templates/dashboard.html's toolbar is the
+        # primary signal an owner sees, this is the backend's safety net. Reconnecting an
+        # already-connected Messenger/Instagram never needs a new slot, so this only blocks a
+        # genuinely new connection.
+        if remaining <= 0 and not ({"messenger", "instagram"} & already_connected):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Your {business.plan_tier.value} plan doesn't include Messenger — "
-                    "upgrade to Growth or Pro to connect a Facebook Page."
+                    f"Your {business.plan_tier.value} plan is limited to "
+                    f"{CHANNEL_LIMIT[business.plan_tier]} channel(s), and you've already used "
+                    "them all — upgrade to connect more."
                 ),
             )
 
@@ -142,16 +179,37 @@ async def page_signup_callback(request: Request, payload: PageSignupPayload) -> 
         except EmbeddedSignupError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-        # Instagram is Pro-only: a Growth business's Page may well have one linked, but we leave
-        # it out of channels_connected and report instagram_connected: False so the UI can
-        # truthfully say "upgrade to Pro" rather than silently dropping a channel it detected.
-        instagram_included = "instagram" in CHANNELS_INCLUDED[business.plan_tier]
-        channels_connected = {**business.channels_connected, "messenger": {"page_id": page_id}}
-        if instagram_account_id and instagram_included:
+        # Doc 3 roadmap (channel choice by tier, 2026-09-09) — only activate what's newly
+        # available (already-connected channels don't need re-activating) and never more than
+        # the plan has slots left for (`budget`). Two ways newly_available can outgrow budget:
+        # budget is 0 but one channel is genuinely new (e.g. Messenger already used the sole
+        # slot, this Page also has Instagram linked — no slot for it at all, so nothing new
+        # activates); or budget is 1 and BOTH are newly available (the real ambiguous case) — only
+        # here does the business's own stated preference matter, falling back to Messenger by
+        # default if they didn't send one, or if they asked for the one this Page doesn't
+        # actually have linked.
+        newly_available = {"messenger"} - already_connected
+        if instagram_account_id:
+            newly_available |= {"instagram"} - already_connected
+
+        budget = max(remaining, 0)
+        if len(newly_available) <= budget:
+            to_activate = newly_available
+        elif budget == 0:
+            to_activate = set()
+        else:
+            to_activate = (
+                {payload.preferred_channel}
+                if payload.preferred_channel in newly_available
+                else {"messenger"}
+            )
+
+        channels_connected = dict(business.channels_connected)
+        if "messenger" in to_activate:
+            channels_connected["messenger"] = {"page_id": page_id}
+        if "instagram" in to_activate:
             channels_connected["instagram"] = {"page_id": page_id}
         business.channels_connected = channels_connected
+        instagram_activated = "instagram" in to_activate
 
-    return {
-        "connected": True,
-        "instagram_connected": bool(instagram_account_id and instagram_included),
-    }
+    return {"connected": True, "instagram_connected": instagram_activated}

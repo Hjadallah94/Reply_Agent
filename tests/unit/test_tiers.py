@@ -5,7 +5,7 @@ tier nobody remembered to add a row for.
 
 from reply_agent.billing.tiers import (
     CATALOG_LIMIT,
-    CHANNELS_INCLUDED,
+    CHANNEL_LIMIT,
     MESSAGE_CAPS,
     OVERAGE_RATE_JOD,
     TIER_PRICE_JOD,
@@ -39,26 +39,22 @@ def test_starter_and_growth_catalog_limits_are_finite_and_increasing():
     assert CATALOG_LIMIT[PlanTier.starter] < CATALOG_LIMIT[PlanTier.growth]
 
 
-def test_every_tier_has_channels_included():
-    assert set(CHANNELS_INCLUDED) == ALL_TIERS
+def test_every_tier_has_a_channel_limit():
+    assert set(CHANNEL_LIMIT) == ALL_TIERS
 
 
-def test_whatsapp_is_included_on_every_tier():
-    assert all("whatsapp" in channels for channels in CHANNELS_INCLUDED.values())
-
-
-def test_channel_access_is_strictly_additive_by_tier():
-    """Doc 3 roadmap (real tier differentiation) — Growth's channels must be a superset of
-    Starter's, and Pro's a superset of Growth's, or the "upgrade to unlock X" messaging in the
-    dashboard/signup pages would be lying about what a higher tier actually gets you.
+def test_channel_limits_are_strictly_increasing_by_tier():
+    """Doc 3 roadmap (channel choice by tier, 2026-09-09) — a tier grants a *count* of channels,
+    not specific ones (superseded the earlier fixed WhatsApp->+Messenger->+Instagram ladder), so
+    what must hold is that a higher tier always gets to connect strictly more channels, not that
+    it includes any particular one.
     """
-    starter = set(CHANNELS_INCLUDED[PlanTier.starter])
-    growth = set(CHANNELS_INCLUDED[PlanTier.growth])
-    pro = set(CHANNELS_INCLUDED[PlanTier.pro])
-    assert starter < growth < pro
+    assert (
+        CHANNEL_LIMIT[PlanTier.starter]
+        < CHANNEL_LIMIT[PlanTier.growth]
+        < CHANNEL_LIMIT[PlanTier.pro]
+    )
 
 
-def test_only_pro_includes_instagram():
-    assert "instagram" not in CHANNELS_INCLUDED[PlanTier.starter]
-    assert "instagram" not in CHANNELS_INCLUDED[PlanTier.growth]
-    assert "instagram" in CHANNELS_INCLUDED[PlanTier.pro]
+def test_pro_channel_limit_covers_all_three_channels():
+    assert CHANNEL_LIMIT[PlanTier.pro] == 3

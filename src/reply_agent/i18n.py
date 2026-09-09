@@ -35,15 +35,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "ar": "الرقم المسجل (بانتظار الربط)",
     },
     "dashboard.messenger_connected": {"en": "Messenger connected", "ar": "ماسنجر متصل"},
-    "dashboard.connect_messenger": {"en": "Connect Facebook Page", "ar": "ربط صفحة فيسبوك"},
-    "dashboard.messenger_upsell": {
-        "en": "Messenger & Instagram — upgrade to Growth or Pro",
-        "ar": "ماسنجر وإنستغرام — قم بالترقية إلى Growth أو Pro",
-    },
+    "dashboard.connect_messenger": {"en": "Connect Messenger", "ar": "ربط ماسنجر"},
     "dashboard.instagram_connected": {"en": "Instagram connected", "ar": "إنستغرام متصل"},
-    "dashboard.instagram_upsell": {
-        "en": "Instagram — upgrade to Pro",
-        "ar": "إنستغرام — قم بالترقية إلى Pro",
+    "dashboard.connect_instagram": {"en": "Connect Instagram", "ar": "ربط إنستغرام"},
+    # Doc 3 roadmap (channel choice by tier, 2026-09-09) — shared across all three channel rows
+    # (WhatsApp/Messenger/Instagram): a tier grants a *count* of channels, not specific ones, so
+    # there's no single channel this message needs to name.
+    "dashboard.channel_upsell": {
+        "en": "You've used all your plan's channels — upgrade for more",
+        "ar": "استخدمت كل قنوات باقتك — قم بالترقية للمزيد",
     },
     "dashboard.manage_catalog": {"en": "Manage catalog", "ar": "إدارة الكتالوج"},
     "dashboard.manage_rules": {"en": "Rules & Autonomy", "ar": "القواعد والاستقلالية"},
@@ -316,7 +316,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # billing.html's change-plan cards and signup.html's plan-first comparison cards.
     "billing.products_label": {"en": "products", "ar": "منتج"},
     "billing.unlimited_products": {"en": "Unlimited products", "ar": "منتجات غير محدودة"},
-    "billing.channels_label": {"en": "Channels", "ar": "القنوات"},
+    # Doc 3 roadmap (channel choice by tier, 2026-09-09) — the number itself is interpolated in
+    # the template (billing.html), same convention as billing.products_label above.
+    "billing.channels_label": {
+        "en": "channel(s) of your choice — WhatsApp, Instagram, or Messenger",
+        "ar": "قناة/قنوات حسب اختيارك — واتساب أو إنستغرام أو ماسنجر",
+    },
     "billing.photos_included": {"en": "Product photos", "ar": "صور المنتجات"},
     "status.payment_pending": {"en": "Payment pending", "ar": "بانتظار الدفع"},
     "status.trialing": {"en": "Trial", "ar": "تجريبي"},

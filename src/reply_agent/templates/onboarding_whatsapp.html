@@ -8,9 +8,11 @@ create the WhatsApp Business Account and phone number you want to connect.</p>
 
 {% if not config_id %}
 <div class="reason">Not configured yet — META_EMBEDDED_SIGNUP_CONFIG_ID is missing on the server.</div>
+{% elif remaining <= 0 %}
+<div class="reason">You've used all your plan's channels — upgrade to connect more.</div>
 {% endif %}
 
-<button id="connect-btn" {% if not config_id %}disabled{% endif %}>Connect WhatsApp</button>
+<button id="connect-btn" {% if not config_id or remaining <= 0 %}disabled{% endif %}>Connect WhatsApp</button>
 <p id="status" class="muted"></p>
 
 <div id="fb-root"></div>
