@@ -335,6 +335,20 @@ class Order(Base):
     )
 
 
+class UserRole(enum.StrEnum):
+    """Doc 3 roadmap (team seats, 2026-09-15) — owner is the account created at signup (or the
+    only user on a business that predates this feature, backfilled by migration); staff is
+    anyone the owner invites afterward. The only behavior difference today: inviting/removing a
+    teammate is owner-only (api/dashboard.py's team routes) — everything else (conversations,
+    catalog, rules, billing view) stays open to every user on the business, matching this
+    feature's own "just more logins to share the work" framing rather than a full permissions
+    matrix nobody asked for.
+    """
+
+    owner = "owner"
+    staff = "staff"
+
+
 class User(Base):
     """A business owner's own login (Doc 3: dashboard access needs auth before real sellers
     use it — not in the original data model doc, added once the dashboard itself existed).
@@ -349,6 +363,12 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # Doc 3 roadmap (team seats, 2026-09-15) — see UserRole's own docstring. Defaults to owner:
+    # every user created before this column existed is, definitionally, the sole login on their
+    # business at the time, i.e. exactly the "owner" case.
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role"), nullable=False, default=UserRole.owner
+    )
     # Doc 3 roadmap (partner meeting 2026-09-01) — recorded at signup once the ToS/Privacy
     # checkbox is required there; nullable because accounts created before this feature existed
     # never accepted anything through this flow (grandfathered, not retroactively backfilled).

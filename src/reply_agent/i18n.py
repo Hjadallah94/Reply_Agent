@@ -47,6 +47,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "dashboard.manage_catalog": {"en": "Manage catalog", "ar": "إدارة الكتالوج"},
     "dashboard.manage_rules": {"en": "Rules & Autonomy", "ar": "القواعد والاستقلالية"},
+    "dashboard.manage_team": {"en": "Team", "ar": "الفريق"},
     "dashboard.away_heading": {"en": "Availability", "ar": "التوفر"},
     "dashboard.away_status_away": {"en": "Away today", "ar": "غير متاح اليوم"},
     "dashboard.away_status_active": {"en": "Replying normally", "ar": "الرد يعمل بشكل طبيعي"},
@@ -258,6 +259,33 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "rules.custom_submit": {"en": "Submit for review", "ar": "إرسال للمراجعة"},
     "rules.custom_empty": {"en": "No custom rules yet.", "ar": "لا توجد قواعد مخصصة بعد."},
+    # --- team.html (Doc 3 roadmap, team seats, 2026-09-15) ---
+    "team.heading": {"en": "Team", "ar": "الفريق"},
+    "team.description": {
+        "en": "Everyone listed here can see and reply to every conversation, same as you.",
+        "ar": "كل من هو مذكور هنا يقدر يشوف ويرد على كل المحادثات، متلك تمامًا.",
+    },
+    "team.you": {"en": "you", "ar": "أنت"},
+    "team.role_owner": {"en": "Owner", "ar": "المالك"},
+    "team.role_staff": {"en": "Staff", "ar": "موظف"},
+    "team.remove": {"en": "Remove", "ar": "إزالة"},
+    "team.add_heading": {"en": "Add a teammate", "ar": "إضافة زميل"},
+    "team.add_description": {
+        "en": "Set a login for them yourself and share the password with them directly — "
+        "there's no invite email.",
+        "ar": "أنشئ لهم تسجيل دخول وشارك كلمة المرور معهم مباشرة — ما في إيميل دعوة.",
+    },
+    "team.email_label": {"en": "Their email", "ar": "إيميلهم"},
+    "team.password_label": {"en": "Set a password for them", "ar": "حدد كلمة مرور لهم"},
+    "team.password_hint": {
+        "en": "At least 8 characters. They can log in with this right away.",
+        "ar": "8 أحرف على الأقل. يقدرون يسجلوا دخول فيها فورًا.",
+    },
+    "team.add_submit": {"en": "Add teammate", "ar": "إضافة زميل"},
+    "team.seat_limit_reached": {
+        "en": "You've used all your plan's team seats — upgrade to add more.",
+        "ar": "استخدمت كل مقاعد الفريق في باقتك — قم بالترقية لإضافة المزيد.",
+    },
     # --- conversations (Doc 3 roadmap, partner meeting 2026-09-01: full conversation view) ---
     "conversations.view_all": {"en": "View all", "ar": "عرض الكل"},
     "conversations.heading": {"en": "All conversations", "ar": "كل المحادثات"},
@@ -323,6 +351,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "ar": "قناة/قنوات حسب اختيارك — واتساب أو إنستغرام أو ماسنجر",
     },
     "billing.photos_included": {"en": "Product photos", "ar": "صور المنتجات"},
+    "billing.seats_label": {"en": "team seats", "ar": "مقعد فريق"},
     "status.payment_pending": {"en": "Payment pending", "ar": "بانتظار الدفع"},
     "status.trialing": {"en": "Trial", "ar": "تجريبي"},
     # --- status/badge values (real enums + conventional stock_status values) ---

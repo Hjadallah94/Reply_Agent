@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ t('team.heading') }} — {{ business.name }}{% endblock %}
+{% block content %}
+<a class="back" href="/businesses/{{ business.id }}/dashboard">&larr; {{ business.name }}</a>
+<h1>{{ t('team.heading') }}</h1>
+<p class="muted" style="margin: 0 0 18px;">{{ t('team.description') }}</p>
+
+{% for member in teammates %}
+<div class="card">
+  <div class="row">
+    <span>
+      {{ member.email }}
+      {% if member.id == current_user.id %}<span class="muted">({{ t('team.you') }})</span>{% endif %}
+    </span>
+    <span style="display: flex; align-items: center; gap: 10px;">
+      <span class="badge {{ 'resolved' if member.role.value == 'owner' else 'closed' }}">{{ t('team.role_' + member.role.value) }}</span>
+      {% if current_user.role.value == 'owner' and member.id != current_user.id %}
+      <form method="post" action="/businesses/{{ business.id }}/dashboard/team/{{ member.id }}/remove" style="margin: 0;">
+        <button type="submit" class="export-link" style="background: none; cursor: pointer;">{{ t('team.remove') }}</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+</div>
+{% endfor %}
+
+{% if current_user.role.value == 'owner' %}
+  {% if teammates|length < seat_limit %}
+  <h2 style="margin: 28px 0 4px;">{{ t('team.add_heading') }}</h2>
+  <p class="muted" style="margin: 0 0 14px; font-size: 13.5px;">{{ t('team.add_description') }}</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/businesses/{{ business.id }}/dashboard/team/add">
+    <div class="field">
+      <label for="email">{{ t('team.email_label') }}</label>
+      <input type="email" id="email" name="email" required>
+    </div>
+    <div class="field">
+      <label for="password">{{ t('team.password_label') }}</label>
+      <input type="password" id="password" name="password" minlength="8" required>
+      <span class="hint">{{ t('team.password_hint') }}</span>
+    </div>
+    <button type="submit">{{ t('team.add_submit') }}</button>
+  </form>
+  {% else %}
+  <p class="muted" style="margin: 20px 0 0; font-size: 13.5px;">{{ t('team.seat_limit_reached') }}</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

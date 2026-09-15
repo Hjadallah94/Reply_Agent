@@ -52,6 +52,19 @@ CHANNEL_LIMIT: dict[PlanTier, int] = {
     PlanTier.pro: 3,
 }
 
+# Doc 3 roadmap (team seats, 2026-09-15) — Doc 5 Section 2 already promised "team seats" as a
+# Pro-only feature; this is the first code that actually enforces it. Proposed default, not
+# derived from real usage data yet — adjust once real Pro businesses give a sense of what's
+# actually needed, same convention as CATALOG_LIMIT. Enforced against len(Business.users) in
+# api/dashboard.py's add_teammate; deliberately not retroactive (a business already over a
+# newly-lower limit keeps its existing users, only a new invite is blocked), same convention as
+# every other tier limit in this file.
+SEAT_LIMIT: dict[PlanTier, int] = {
+    PlanTier.starter: 1,
+    PlanTier.growth: 1,
+    PlanTier.pro: 5,
+}
+
 
 def tier_comparison_rows() -> list[dict]:
     """One row per PlanTier, every real feature difference in one place — signup.html's plan-
@@ -70,6 +83,7 @@ def tier_comparison_rows() -> list[dict]:
             "catalog_limit": CATALOG_LIMIT[tier],
             "channel_limit": CHANNEL_LIMIT[tier],
             "photos_included": tier == PlanTier.pro,
+            "seat_limit": SEAT_LIMIT[tier],
         }
         for tier in PlanTier
     ]

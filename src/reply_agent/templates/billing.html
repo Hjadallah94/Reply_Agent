@@ -47,6 +47,7 @@
       </li>
       <li>{{ tier.channel_limit }} {{ t('billing.channels_label') }}</li>
       {% if tier.photos_included %}<li>{{ t('billing.photos_included') }}</li>{% endif %}
+      {% if tier.seat_limit > 1 %}<li>{{ tier.seat_limit }} {{ t('billing.seats_label') }}</li>{% endif %}
     </ul>
   </label>
   {% endfor %}

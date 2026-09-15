@@ -14,6 +14,7 @@
       <li>{% if row.catalog_limit %}{{ row.catalog_limit }} products{% else %}Unlimited products{% endif %}</li>
       <li>{{ row.channel_limit }} channel{{ 's' if row.channel_limit != 1 }} of your choice — WhatsApp, Instagram, or Messenger</li>
       {% if row.photos_included %}<li>Product photos</li>{% endif %}
+      {% if row.seat_limit > 1 %}<li>{{ row.seat_limit }} team seats</li>{% endif %}
     </ul>
     <a class="export-link" href="/signup?tier={{ row.value }}" style="display: block; text-align: center;">Get started</a>
   </div>

@@ -19,6 +19,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from reply_agent.auth.dependencies import (
@@ -26,7 +27,8 @@ from reply_agent.auth.dependencies import (
     get_current_user,
     require_business_access,
 )
-from reply_agent.billing.tiers import CATALOG_LIMIT, CHANNEL_LIMIT, tier_comparison_rows
+from reply_agent.auth.security import hash_password
+from reply_agent.billing.tiers import CATALOG_LIMIT, CHANNEL_LIMIT, SEAT_LIMIT, tier_comparison_rows
 from reply_agent.billing.usage import get_or_create_subscription, usage_summary
 from reply_agent.config import get_settings
 from reply_agent.db.models import (
@@ -48,7 +50,10 @@ from reply_agent.db.models import (
     PlanTier,
     ProductImage,
     PushSubscription,
+    User,
+    UserRole,
 )
+from reply_agent.db.session import get_sessionmaker
 from reply_agent.db.tenant_session import tenant_session
 from reply_agent.graph.nodes.request_owner_approval import AUTO_APPROVAL_RESOLVED_BY
 from reply_agent.graph.nodes.send_reply import send_reply
@@ -409,6 +414,102 @@ async def request_plan(
         subscription.billing_status = BillingStatus.payment_pending
 
     return RedirectResponse(url=f"/businesses/{business.id}/dashboard/billing", status_code=303)
+
+
+@router.get("/businesses/{business_id}/dashboard/team")
+async def team_page(request: Request, business: Business = Depends(require_business_access)):
+    current_user = await get_current_user(request)
+
+    async with get_sessionmaker()() as session:
+        # User isn't a tenant-RLS table (same as api/auth.py's own signup/login) — the plain
+        # sessionmaker, not tenant_session, matches that existing precedent.
+        teammates = (
+            await session.scalars(
+                select(User).where(User.business_id == business.id).order_by(User.created_at)
+            )
+        ).all()
+
+    return await _render(
+        request,
+        "team.html",
+        business=business,
+        current_user=current_user,
+        teammates=teammates,
+        seat_limit=SEAT_LIMIT[business.plan_tier],
+    )
+
+
+@router.post("/businesses/{business_id}/dashboard/team/add")
+async def add_teammate(
+    request: Request,
+    business_id: uuid.UUID,
+    email: str = Form(...),
+    password: str = Form(...),
+    business: Business = Depends(require_business_access),
+):
+    current_user = await get_current_user(request)
+    if current_user.role != UserRole.owner:
+        raise HTTPException(status_code=403, detail="Only the account owner can add teammates")
+
+    email = email.strip().lower()
+    if not email or len(password) < 8:
+        raise HTTPException(
+            status_code=400, detail="A valid email and a password of at least 8 characters."
+        )
+
+    async with get_sessionmaker()() as session:
+        seat_count = await session.scalar(
+            select(func.count()).select_from(User).where(User.business_id == business_id)
+        )
+        seat_limit = SEAT_LIMIT[business.plan_tier]
+        if seat_count >= seat_limit:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Your {business.plan_tier.value} plan is limited to {seat_limit} "
+                    "seat(s) — upgrade to add more teammates."
+                ),
+            )
+
+        session.add(
+            User(
+                business_id=business_id,
+                email=email,
+                password_hash=hash_password(password),
+                role=UserRole.staff,
+            )
+        )
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            raise HTTPException(
+                status_code=400, detail="That email is already registered."
+            ) from exc
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/team", status_code=303)
+
+
+@router.post("/businesses/{business_id}/dashboard/team/{user_id}/remove")
+async def remove_teammate(
+    business_id: uuid.UUID,
+    user_id: uuid.UUID,
+    request: Request,
+    business: Business = Depends(require_business_access),
+):
+    current_user = await get_current_user(request)
+    if current_user.role != UserRole.owner:
+        raise HTTPException(status_code=403, detail="Only the account owner can remove teammates")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You can't remove your own account.")
+
+    async with get_sessionmaker()() as session:
+        target = await session.get(User, user_id)
+        if target is None or target.business_id != business_id:
+            raise HTTPException(status_code=404, detail="Teammate not found")
+        await session.delete(target)
+        await session.commit()
+
+    return RedirectResponse(url=f"/businesses/{business.id}/dashboard/team", status_code=303)
 
 
 CONVERSATIONS_PAGE_SIZE = 50

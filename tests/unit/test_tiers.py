@@ -8,7 +8,9 @@ from reply_agent.billing.tiers import (
     CHANNEL_LIMIT,
     MESSAGE_CAPS,
     OVERAGE_RATE_JOD,
+    SEAT_LIMIT,
     TIER_PRICE_JOD,
+    tier_comparison_rows,
 )
 from reply_agent.db.models import PlanTier
 
@@ -58,3 +60,20 @@ def test_channel_limits_are_strictly_increasing_by_tier():
 
 def test_pro_channel_limit_covers_all_three_channels():
     assert CHANNEL_LIMIT[PlanTier.pro] == 3
+
+
+def test_every_tier_has_a_seat_limit():
+    assert set(SEAT_LIMIT) == ALL_TIERS
+
+
+def test_only_pro_has_more_than_one_seat():
+    """Doc 5 Section 2 promises "team seats" as a Pro-only feature."""
+    assert SEAT_LIMIT[PlanTier.starter] == 1
+    assert SEAT_LIMIT[PlanTier.growth] == 1
+    assert SEAT_LIMIT[PlanTier.pro] > 1
+
+
+def test_tier_comparison_rows_includes_seat_limit():
+    rows = {row["value"]: row for row in tier_comparison_rows()}
+    for tier in PlanTier:
+        assert rows[tier.value]["seat_limit"] == SEAT_LIMIT[tier]
