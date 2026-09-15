@@ -61,8 +61,26 @@ Both live studies stayed entirely on the Haiku path — neither has yet produced
 This is the single most important — and most misunderstood — cost line, and it's the reason this business model works at a 10 JOD entry price:
 
 - **Instagram Messaging and Facebook Messenger: $0 per message.** Meta does not charge for messages sent or received through these APIs — the cost is entirely the friction of app review (Doc 3, Section 2), not a per-message fee.
-- **WhatsApp "service" messages (replies to a customer within the 24-hour window they opened): $0 per message.** Meta made service conversations free for all businesses in November 2024, and the July 2025 shift to per-message billing only applies to business-initiated Marketing, Utility, and Authentication template messages sent outside that window.
+- **WhatsApp "service" messages (replies to a customer within the 24-hour window they opened): $0 per message — until October 1, 2026.** Meta made service conversations free for all businesses in November 2024; that free lane ends on a confirmed, dated schedule (see the callout below), not a hypothetical.
 - **This product is architected to stay almost entirely inside the free lane:** Doc 1, Section 4.2 explicitly excludes outbound marketing/broadcast messages from V1, and the agent only ever replies to a customer who messaged first. The only paid WhatsApp messages in this model are the optional Pro-tier proactive utility messages (restock/abandoned-cart), which are priced with the Meta fee passed through, not absorbed.
+
+**Confirmed, not hypothetical (found 2026-09-15) — this free lane narrows on October 1, 2026.**
+Verified against Meta's own official pricing documentation plus corroborating BSP sources (Zendesk,
+YCloud, SendPulse): starting October 1, 2026, Meta begins charging for WhatsApp service messages —
+free-form replies sent by a human agent *or* a third-party AI, exactly this product's core traffic
+— at the same per-message rate as a utility/authentication template in the recipient's country.
+**Each business phone number keeps 1,000 free service messages per month** (resets monthly, doesn't
+roll over); charges apply only from the 1,001st. Checked against this doc's own tier caps (Section
+2): **Starter's 400 msg/mo cap stays comfortably under the 1,000 free allowance — unaffected.**
+**Growth's 1,500 msg/mo cap and Pro's 5,000 msg/mo cap both exceed it** — at full cap utilization,
+Growth would have ~500 chargeable messages/month and Pro ~4,000, once this takes effect. The exact
+JOD cost per message (varies by the customer's own country, not the business's) isn't in this
+revision — Meta's rate card for Jordan specifically wasn't confirmed from a primary source during
+this pass; the next step is pulling Jordan's actual rate from the business's own Meta Business
+Manager account (rates there are account-specific) and re-running Section 4 for Growth/Pro before
+this takes effect. **This is the single most consequential open item in this document right now**
+— unlike Section 3.5's Google Maps line (a small, controllable cost), this one moves the needle on
+Growth/Pro's entire margin story and has a hard, imminent deadline, not a "someday" one.
 - **Recommended integration path: Meta's own WhatsApp Cloud API directly, not a third-party BSP** (Business Solution Provider) like Twilio or 360dialog. Those typically add $40–55/month in platform fees or a per-message markup on top of Meta's own rates — money that would otherwise erode margin at this price point. Building directly on the Cloud API (Doc 2, Section 6) means Reply Agent itself is the "platform layer" a seller would otherwise pay a BSP for.
 
 > **Budgeted Meta cost per customer, per month**
@@ -122,7 +140,7 @@ Assume a $220/month fixed platform baseline (Section 3.4) and an early customer 
 
 | Risk / variable | Effect | Mitigation |
 |---|---|---|
-| Meta reintroduces paid "service" conversations on WhatsApp (it has changed pricing policy before). | Would meaningfully raise the WhatsApp cost line, especially for high-volume tiers. | Monitor Meta's developer pricing announcements as a standing operational task; keep tier pricing/caps as an adjustable lever, not hard-coded into the product. |
+| **Confirmed, not hypothetical (2026-09-15): Meta charges for WhatsApp service messages from October 1, 2026** — 1,000 free/month per business phone number, then billed at the recipient-country utility rate. See Section 3.2. | Starter (400 msg/mo cap) stays under the free allowance, unaffected. Growth (1,500) and Pro (5,000) both exceed it at full cap usage — a real, currently-unpriced cost line on exactly the two tiers this doc's margins looked healthiest on. | Get Jordan's exact per-message rate from the business's own Meta Business Manager account before Oct 1; re-run Section 4 for Growth/Pro with it added. Not a "monitor for changes" item anymore — it has a fixed date, about two weeks out as of this revision. |
 | Actual usage runs consistently near the message cap rather than below it. | Margins shown in Section 4 are already the worst case (100% cap utilization), so this is already priced in — but overage pricing (Section 2) is set above marginal cost specifically to protect margin if it happens anyway. | — |
 | LLM prices drop further (the historical trend for both Anthropic and OpenAI). | Improves margin further; no action needed beyond periodically revisiting model routing (Doc 2, Section 3.3) to take advantage. | — |
 | Payment gateway fee is higher than the 3% assumption for the chosen local provider. | Slightly compresses margin (roughly $0.15–0.30/customer/month at the assumed volumes). | Confirm actual gateway fee during vendor selection (Doc 3, Phase 4) and re-run this table before finalizing prices. |
